@@ -134,16 +134,17 @@ elif menu == "Staphylococcus aureus":
         st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
 
         correspondance = {
-            "Gentamycine": "Gentamycine",
-            "Vancomycine": "Vancomycine",
-            "Teicoplanine": "Teicoplanine",
-            "Linezolide": "Linezolide",
-            "Daptomycine": "Daptomycine",
-            "Clindamycine": "Clindamycine",
-            "Oxacilline": "Oxacilline",
-            "Cotrimoxazole": "Cotrimoxazole",
-            "Dalbavancine": "Dalbavancine"
-        }
+    "Teicoplanine": "Teicoplanine",
+    "Daptomycine": "Daptomycine",
+    "Sxt": "Cotrimoxazole",
+    "Vancomycine": "Vancomycine",
+    "Gentamycine": "Gentamycine",
+    "Linezolide": "Linezolide",
+    "Clindamycine": "Clindamycine",
+    "Dalbavancine": "Dalbavancine",
+    "Oxacilline": "Oxacilline"
+}
+
 
         for abx, path in antibiotiques.items():
             df_out = pd.read_excel(path)
