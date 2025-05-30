@@ -129,7 +129,7 @@ elif menu == "Staphylococcus aureus":
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
 
-       with tab3:
+with tab3:
     st.subheader("🚨 Alertes croisées par semaine et service")
     alertes = []
     st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
