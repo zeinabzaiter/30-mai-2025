@@ -129,8 +129,6 @@ elif menu == "Staphylococcus aureus":
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
 
-    ... (previous content unchanged)
-
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
         alertes = []
@@ -163,5 +161,3 @@ elif menu == "Staphylococcus aureus":
         st.dataframe(df_final_alertes, use_container_width=True)
         if not df_final_alertes.empty:
             st.download_button("📥 Télécharger les alertes", data=df_final_alertes.to_csv(index=False), file_name="alertes_detectees.csv")
-
-
