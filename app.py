@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import plotly.express as px
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Surveillance bactérienne", layout="wide")
@@ -35,15 +34,15 @@ phenotypes = {
 menu = st.sidebar.radio("Navigation", ["Vue globale", "Staphylococcus aureus"])
 
 if menu == "Vue globale":
-    st.title("📋 Bactéries à surveiller")
+    st.title("\U0001F4CB Bactéries à surveiller")
     st.dataframe(bacteries_df, use_container_width=True)
 
 elif menu == "Staphylococcus aureus":
-    st.title("🦠 Surveillance : Staphylococcus aureus")
+    st.title("\U0001F9A0 Surveillance : Staphylococcus aureus")
     tab1, tab2, tab3 = st.tabs(["Antibiotiques", "Phénotypes", "Alertes semaine/service"])
 
     with tab1:
-        st.subheader("📈 Évolution hebdomadaire de la résistance")
+        st.subheader("\U0001F4C8 Évolution hebdomadaire de la résistance")
         abx = st.selectbox("Choisir un antibiotique", sorted(antibiotiques.keys()))
         df_abx = pd.read_excel(antibiotiques[abx])
         week_col = "Week" if "Week" in df_abx.columns else "Semaine"
@@ -67,7 +66,7 @@ elif menu == "Staphylococcus aureus":
         if "OUTLIER" in df_abx.columns:
             outliers = df_abx[df_abx["OUTLIER"] == True]
             fig.add_trace(go.Scatter(x=outliers[week_col], y=outliers["Pourcentage"],
-                                     mode="markers", name="🔴 Alerte (OUTLIER)",
+                                     mode="markers", name="\U0001F534 Alerte (OUTLIER)",
                                      marker=dict(color="red", size=10)))
 
         fig.update_layout(title=f"Évolution de la résistance à {abx}",
@@ -83,7 +82,7 @@ elif menu == "Staphylococcus aureus":
         """)
 
     with tab2:
-        st.subheader("🧬 Évolution des phénotypes")
+        st.subheader("\U0001F9EC Évolution des phénotypes")
         pheno = st.selectbox("Choisir un phénotype", list(phenotypes.keys()))
         df_pheno = pd.read_excel(phenotypes[pheno])
         df_pheno["Week"] = pd.to_numeric(df_pheno["Week"], errors='coerce')
@@ -112,7 +111,7 @@ elif menu == "Staphylococcus aureus":
             outliers = df_pheno[df_pheno["OUTLIER"] == True]
             fig2.add_trace(go.Scatter(x=outliers["Week"], y=outliers["Pourcentage"],
                                       mode="markers",
-                                      name="🔴 Alerte (OUTLIER)",
+                                      name="\U0001F534 Alerte (OUTLIER)",
                                       marker=dict(color="red", size=10)))
 
         fig2.update_layout(title=f"Évolution du phénotype {pheno}",
@@ -128,57 +127,57 @@ elif menu == "Staphylococcus aureus":
         - **🔴 OUTLIER** : % de présence dépassant ce seuil → alerte
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
-with tab3:
-    st.subheader("🚨 Alertes croisées par semaine et service")
-    alertes = []
-    st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
 
-    # correspondance mise à jour avec les noms déjà simplifiés (comme dans abx)
-    correspondance = {
-        "Gentamycine": "Gentamycine",
-        "Vancomycine": "Vancomycine",
-        "Teicoplanine": "Teicoplanine",
-        "Linezolide": "Linezolide",
-        "Daptomycine": "Daptomycine",
-        "Clindamycine": "Clindamycine",
-        "Oxacilline": "Oxacilline",
-        "Cotrimoxazole": "Cotrimoxazole",
-        "Dalbavancine": "Dalbavancine"
-    }
+    with tab3:
+        st.subheader("\U0001F6A8 Alertes croisées par semaine et service")
+        alertes = []
+        st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
 
-    for abx, path in antibiotiques.items():
-        df_out = pd.read_excel(path)
-        week_col = "Week" if "Week" in df_out.columns else "Semaine"
-        if "OUTLIER" not in df_out.columns:
-            continue
-        df_out[week_col] = pd.to_numeric(df_out[week_col], errors='coerce')
-        weeks = df_out[df_out["OUTLIER"] == True][week_col].dropna().unique()
+        correspondance = {
+            "Gentamycine": "Gentamycine",
+            "Vancomycine": "Vancomycine",
+            "Teicoplanine": "Teicoplanine",
+            "Linezolide": "Linezolide",
+            "Daptomycine": "Daptomycine",
+            "Clindamycine": "Clindamycine",
+            "Oxacilline": "Oxacilline",
+            "Cotrimoxazole": "Cotrimoxazole",
+            "Dalbavancine": "Dalbavancine"
+        }
 
-        col_export = correspondance.get(abx, abx)
-        for w in weeks:
+        for abx, path in antibiotiques.items():
+            df_out = pd.read_excel(path)
+            week_col = "Week" if "Week" in df_out.columns else "Semaine"
+            if "OUTLIER" not in df_out.columns:
+                continue
+            df_out[week_col] = pd.to_numeric(df_out[week_col], errors='coerce')
+            weeks = df_out[df_out["OUTLIER"] == True][week_col].dropna().unique()
+
+            col_export = correspondance.get(abx, abx)
             if col_export not in df_export.columns:
                 st.warning(f"⚠️ L'antibiotique '{col_export}' n'existe pas dans les colonnes du fichier d'export.")
                 continue
 
-            mask = (df_export['semaine'] == w)
-            resist = (df_export[col_export] == 'R')
-            df_alert = df_export[mask & resist]
-            for srv in df_alert['uf'].unique():
-                nb_r = df_alert[df_alert['uf'] == srv].shape[0]
-                alertes.append({
-                    "Semaine": int(w),
-                    "Service": srv,
-                    "Antibiotique": col_export,
-                    "Nb_R": nb_r,
-                    "Alarme": f"Semaine {int(w)} : Alerte pour {col_export} dans le service {srv}"
-                })
+            for w in weeks:
+                mask = (df_export['semaine'] == w)
+                resist = (df_export[col_export] == 'R')
+                df_alert = df_export[mask & resist]
+                for srv in df_alert['uf'].unique():
+                    nb_r = df_alert[df_alert['uf'] == srv].shape[0]
+                    alertes.append({
+                        "Semaine": int(w),
+                        "Service": srv,
+                        "Antibiotique": col_export,
+                        "Nb_R": nb_r,
+                        "Alarme": f"Semaine {int(w)} : Alerte pour {col_export} dans le service {srv}"
+                    })
 
-    df_final_alertes = pd.DataFrame(alertes)
-    st.dataframe(df_final_alertes, use_container_width=True)
+        df_final_alertes = pd.DataFrame(alertes)
+        st.dataframe(df_final_alertes, use_container_width=True)
 
-    if not df_final_alertes.empty:
-        st.download_button(
-            "📥 Télécharger les alertes",
-            data=df_final_alertes.to_csv(index=False),
-            file_name="alertes_detectees.csv"
-        )
+        if not df_final_alertes.empty:
+            st.download_button(
+                "\U0001F4E5 Télécharger les alertes",
+                data=df_final_alertes.to_csv(index=False),
+                file_name="alertes_detectees.csv"
+            )
