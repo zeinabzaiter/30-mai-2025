@@ -133,16 +133,17 @@ with tab3:
     alertes = []
     st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
 
+    # correspondance mise à jour avec les noms déjà simplifiés (comme dans abx)
     correspondance = {
-        "Gentamicin_analyse_2024": "Gentamycine",
-        "Vancomycin_analyse_2024": "Vancomycine",
-        "Teicoplanin_analyse_2024": "Teicoplanine",
-        "Linezolid_analyse": "Linezolide",
-        "Daptomycin_analyse": "Daptomycine",
-        "Clindamycin_analyse": "Clindamycine",
-        "Oxacillin_analyse_2024": "Oxacilline",
-        "Sxt_analyse": "Cotrimoxazole",
-        "Dalbavancin_analyse": "Dalbavancine"
+        "Gentamycine": "Gentamycine",
+        "Vancomycine": "Vancomycine",
+        "Teicoplanine": "Teicoplanine",
+        "Linezolide": "Linezolide",
+        "Daptomycine": "Daptomycine",
+        "Clindamycine": "Clindamycine",
+        "Oxacilline": "Oxacilline",
+        "Cotrimoxazole": "Cotrimoxazole",
+        "Dalbavancine": "Dalbavancine"
     }
 
     for abx, path in antibiotiques.items():
@@ -181,4 +182,3 @@ with tab3:
             data=df_final_alertes.to_csv(index=False),
             file_name="alertes_detectees.csv"
         )
-
