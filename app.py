@@ -128,11 +128,22 @@ elif menu == "Staphylococcus aureus":
         - **🔴 OUTLIER** : % de présence dépassant ce seuil → alerte
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
-
 with tab3:
     st.subheader("🚨 Alertes croisées par semaine et service")
     alertes = []
     st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
+
+    correspondance = {
+        "Gentamicin_analyse_2024": "Gentamycine",
+        "Vancomycin_analyse_2024": "Vancomycine",
+        "Teicoplanin_analyse_2024": "Teicoplanine",
+        "Linezolid_analyse": "Linezolide",
+        "Daptomycin_analyse": "Daptomycine",
+        "Clindamycin_analyse": "Clindamycine",
+        "Oxacillin_analyse_2024": "Oxacilline",
+        "Sxt_analyse": "Cotrimoxazole",
+        "Dalbavancin_analyse": "Dalbavancine"
+    }
 
     for abx, path in antibiotiques.items():
         df_out = pd.read_excel(path)
@@ -142,22 +153,23 @@ with tab3:
         df_out[week_col] = pd.to_numeric(df_out[week_col], errors='coerce')
         weeks = df_out[df_out["OUTLIER"] == True][week_col].dropna().unique()
 
+        col_export = correspondance.get(abx, abx)
         for w in weeks:
-            if abx not in df_export.columns:
-                st.warning(f"⚠️ L'antibiotique '{abx}' n'existe pas dans les colonnes du fichier d'export.")
+            if col_export not in df_export.columns:
+                st.warning(f"⚠️ L'antibiotique '{col_export}' n'existe pas dans les colonnes du fichier d'export.")
                 continue
 
             mask = (df_export['semaine'] == w)
-            resist = (df_export[abx] == 'R')
+            resist = (df_export[col_export] == 'R')
             df_alert = df_export[mask & resist]
             for srv in df_alert['uf'].unique():
                 nb_r = df_alert[df_alert['uf'] == srv].shape[0]
                 alertes.append({
                     "Semaine": int(w),
                     "Service": srv,
-                    "Antibiotique": abx,
+                    "Antibiotique": col_export,
                     "Nb_R": nb_r,
-                    "Alarme": f"Semaine {int(w)} : Alerte pour {abx} dans le service {srv}"
+                    "Alarme": f"Semaine {int(w)} : Alerte pour {col_export} dans le service {srv}"
                 })
 
     df_final_alertes = pd.DataFrame(alertes)
@@ -169,3 +181,4 @@ with tab3:
             data=df_final_alertes.to_csv(index=False),
             file_name="alertes_detectees.csv"
         )
+
