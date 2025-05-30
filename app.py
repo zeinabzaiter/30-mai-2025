@@ -93,6 +93,7 @@ elif menu == "Staphylococcus aureus":
         - **🔴 OUTLIER** : % de résistance dépassant ce seuil → alerte
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
+... # (previous content unchanged)
 
     with tab2:
         st.subheader("🧬 Évolution des phénotypes")
@@ -102,12 +103,47 @@ elif menu == "Staphylococcus aureus":
         df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
         df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
 
-        fig2 = px.line(df_pheno, x="Week", y="Pourcentage", markers=True, title=f"Évolution du phénotype {pheno}",
-                       labels={"Week": "Semaine", "Pourcentage": "% Présence"},
-                       hover_data={"Pourcentage": ':.2f'})
-        fig2.update_traces(line=dict(width=3), hovertemplate="Semaine %{x}<br>% Présence: %{y:.2f}%")
-        fig2.update_layout(yaxis_title="% Présence", xaxis_title="Semaine")
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=df_pheno["Week"], y=df_pheno["Pourcentage"],
+                                  mode="lines+markers",
+                                  name="% Présence",
+                                  line=dict(width=3, color="blue")))
+
+        if "Moyenne_mobile_8s" in df_pheno.columns:
+            fig2.add_trace(go.Scatter(x=df_pheno["Week"], y=df_pheno["Moyenne_mobile_8s"],
+                                      mode="lines",
+                                      name="Moyenne mobile",
+                                      line=dict(dash="dash", color="orange")))
+
+        if "IC_sup" in df_pheno.columns:
+            fig2.add_trace(go.Scatter(x=df_pheno["Week"], y=df_pheno["IC_sup"],
+                                      mode="lines",
+                                      name="Seuil IC 95%",
+                                      line=dict(dash="dot", color="gray")))
+
+        if "OUTLIER" in df_pheno.columns:
+            outliers = df_pheno[df_pheno["OUTLIER"] == True]
+            fig2.add_trace(go.Scatter(x=outliers["Week"], y=outliers["Pourcentage"],
+                                      mode="markers",
+                                      name="🔴 Alerte (OUTLIER)",
+                                      marker=dict(color="red", size=10)))
+
+        fig2.update_layout(title=f"Évolution du phénotype {pheno}",
+                           xaxis_title="Semaine",
+                           yaxis_title="% Présence",
+                           legend_title="Légende",
+                           hovermode="x unified")
         st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("""
+        #### ℹ️ Définition des alertes :
+        - **Seuil IC 95%** : ligne pointillée grise = limite supérieure de confiance
+        - **🔴 OUTLIER** : % de présence dépassant ce seuil → alerte
+        - **Moyenne mobile** : tendance glissante sur 8 semaines
+        """)
+
+... # (rest of the content unchanged)
+
 
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
