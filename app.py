@@ -129,9 +129,13 @@ elif menu == "Staphylococcus aureus":
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
 
+    ... (previous content unchanged)
+
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
         alertes = []
+        st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
+
         for abx, path in antibiotiques.items():
             df_out = pd.read_excel(path)
             week_col = "Week" if "Week" in df_out.columns else "Semaine"
@@ -139,18 +143,25 @@ elif menu == "Staphylococcus aureus":
                 continue
             df_out[week_col] = pd.to_numeric(df_out[week_col], errors='coerce')
             weeks = df_out[df_out["OUTLIER"] == True][week_col].dropna().unique()
+
             for w in weeks:
+                if abx not in df_export.columns:
+                    st.warning(f"⚠️ L'antibiotique '{abx}' n'existe pas dans les colonnes du fichier d'export.")
+                    continue
+
                 mask = (df_export['semaine'] == w)
-                if abx in df_export.columns:
-                    resist = (df_export[abx] == 'R')
-                    df_alert = df_export[mask & resist]
-                    for srv in df_alert['uf'].unique():
-                        nb_r = df_alert[df_alert['uf'] == srv].shape[0]
-                        alertes.append({
-                            "Semaine": int(w), "Service": srv, "Antibiotique": abx,
-                            "Nb_R": nb_r, "Alarme": "Oui"
-                        })
+                resist = (df_export[abx] == 'R')
+                df_alert = df_export[mask & resist]
+                for srv in df_alert['uf'].unique():
+                    nb_r = df_alert[df_alert['uf'] == srv].shape[0]
+                    alertes.append({
+                        "Semaine": int(w), "Service": srv, "Antibiotique": abx,
+                        "Nb_R": nb_r, "Alarme": "Oui"
+                    })
+
         df_final_alertes = pd.DataFrame(alertes)
         st.dataframe(df_final_alertes, use_container_width=True)
         if not df_final_alertes.empty:
             st.download_button("📥 Télécharger les alertes", data=df_final_alertes.to_csv(index=False), file_name="alertes_detectees.csv")
+
+... (rest of the content unchanged)
