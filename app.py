@@ -164,4 +164,4 @@ elif menu == "Staphylococcus aureus":
         if not df_final_alertes.empty:
             st.download_button("📥 Télécharger les alertes", data=df_final_alertes.to_csv(index=False), file_name="alertes_detectees.csv")
 
-... (rest of the content unchanged)
+
