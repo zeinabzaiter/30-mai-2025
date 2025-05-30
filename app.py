@@ -6,25 +6,24 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Surveillance bactérienne", layout="wide")
 
-# === Données principales ===
+# === Données ===
 DATA_FOLDER = "data"
 bacteries_file = os.path.join(DATA_FOLDER, "TOUS les bacteries a etudier.xlsx")
 export_file = os.path.join(DATA_FOLDER, "Export_StaphAureus_COMPLET.csv")
 
-# Charger données principales
 bacteries_df = pd.read_excel(bacteries_file)
 df_export = pd.read_csv(export_file)
 df_export.columns = df_export.columns.str.strip()
 df_export['semaine'] = pd.to_numeric(df_export['semaine'], errors='coerce')
 
-# === Détecter tous les fichiers d'antibiotiques dynamiquement ===
+# Antibiotiques détectés automatiquement
 antibiotiques = {}
 for file in os.listdir(DATA_FOLDER):
     if file.startswith("pct") and file.endswith(".xlsx"):
         abx_name = file.replace("pctR_", "").replace("pct_R_", "").replace("pct", "").replace(".xlsx", "").capitalize()
         antibiotiques[abx_name] = os.path.join(DATA_FOLDER, file)
 
-# === Fichiers phénotypes ===
+# Phénotypes
 phenotypes = {
     "MRSA": os.path.join(DATA_FOLDER, "MRSA_analyse.xlsx"),
     "VRSA": os.path.join(DATA_FOLDER, "VRSA_analyse.xlsx"),
@@ -32,7 +31,7 @@ phenotypes = {
     "Other": os.path.join(DATA_FOLDER, "Other_analyse.xlsx")
 }
 
-# === Navigation ===
+# Navigation
 menu = st.sidebar.radio("Navigation", ["Vue globale", "Staphylococcus aureus"])
 
 if menu == "Vue globale":
@@ -54,37 +53,26 @@ elif menu == "Staphylococcus aureus":
         df_abx["Pourcentage"] = df_abx["Pourcentage"].round(2)
 
         fig = go.Figure()
-
         fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["Pourcentage"],
-                                 mode="lines+markers",
-                                 name="% Résistance",
-                                 line=dict(width=3),
-                                 marker=dict(color="blue")))
-
+                                 mode="lines+markers", name="% Résistance",
+                                 line=dict(width=3), marker=dict(color="blue")))
         if "Moyenne_mobile_8s" in df_abx.columns:
             fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["Moyenne_mobile_8s"],
-                                     mode="lines",
-                                     name="Moyenne mobile",
+                                     mode="lines", name="Moyenne mobile",
                                      line=dict(dash="dash", color="orange")))
-
         if "IC_sup" in df_abx.columns:
             fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["IC_sup"],
-                                     mode="lines",
-                                     name="Seuil IC 95%",
+                                     mode="lines", name="Seuil IC 95%",
                                      line=dict(dash="dot", color="gray")))
-
         if "OUTLIER" in df_abx.columns:
             outliers = df_abx[df_abx["OUTLIER"] == True]
             fig.add_trace(go.Scatter(x=outliers[week_col], y=outliers["Pourcentage"],
-                                     mode="markers",
-                                     name="🔴 Alerte (OUTLIER)",
+                                     mode="markers", name="🔴 Alerte (OUTLIER)",
                                      marker=dict(color="red", size=10)))
 
         fig.update_layout(title=f"Évolution de la résistance à {abx}",
-                          xaxis_title="Semaine",
-                          yaxis_title="% Résistance",
-                          legend_title="Légende",
-                          hovermode="x unified")
+                          xaxis_title="Semaine", yaxis_title="% Résistance",
+                          legend_title="Légende", hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("""
@@ -93,7 +81,6 @@ elif menu == "Staphylococcus aureus":
         - **🔴 OUTLIER** : % de résistance dépassant ce seuil → alerte
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
-... # (previous content unchanged)
 
     with tab2:
         st.subheader("🧬 Évolution des phénotypes")
@@ -141,9 +128,6 @@ elif menu == "Staphylococcus aureus":
         - **🔴 OUTLIER** : % de présence dépassant ce seuil → alerte
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
-
-... # (rest of the content unchanged)
-
 
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
