@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 st.set_page_config(page_title="Surveillance bactérienne", layout="wide")
 
@@ -48,36 +48,31 @@ elif menu == "Staphylococcus aureus":
         abx = st.selectbox("Choisir un antibiotique", list(antibiotiques.keys()))
         df_abx = pd.read_excel(antibiotiques[abx])
         week_col = "Week" if "Week" in df_abx.columns else "Semaine"
+        df_abx[week_col] = pd.to_numeric(df_abx[week_col], errors='coerce')
+        df_abx = df_abx.dropna(subset=[week_col, "Pourcentage"])
+        df_abx["Pourcentage"] = df_abx["Pourcentage"].round(2)
 
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(df_abx[week_col], df_abx["Pourcentage"], label="Pourcentage", linewidth=2, marker='o')
-        ax.plot(df_abx[week_col], df_abx["Moyenne_mobile_8s"], linestyle='--', label="Moyenne mobile")
-        ax.fill_between(df_abx[week_col], df_abx["IC_inf"], df_abx["IC_sup"], color='gray', alpha=0.2, label="IC 95%")
-        outliers = df_abx[df_abx["OUTLIER"] == True]
-        ax.scatter(outliers[week_col], outliers["Pourcentage"], color='darkred', label="Outliers", zorder=5)
-        ax.set_title(f"Évolution de la résistance à {abx}")
-        ax.set_xlabel("Semaine")
-        ax.set_ylabel("% Résistance")
-        ax.legend()
-        ax.grid(True)
-        st.pyplot(fig)
+        fig = px.line(df_abx, x=week_col, y="Pourcentage", markers=True, title=f"Évolution de la résistance à {abx}",
+                      labels={week_col: "Semaine", "Pourcentage": "% Résistance"},
+                      hover_data={"Pourcentage": ':.2f'})
+        fig.update_traces(line=dict(width=3), hovertemplate="Semaine %{x}<br>% Résistance: %{y:.2f}%")
+        fig.update_layout(yaxis_title="% Résistance", xaxis_title="Semaine")
+        st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
         st.subheader("🧬 Évolution des phénotypes")
         pheno = st.selectbox("Choisir un phénotype", list(phenotypes.keys()))
         df_pheno = pd.read_excel(phenotypes[pheno])
-        fig2, ax2 = plt.subplots(figsize=(10, 4))
-        ax2.plot(df_pheno["Week"], df_pheno["Pourcentage"], label="Pourcentage", linewidth=2, marker='o')
-        ax2.plot(df_pheno["Week"], df_pheno["Moyenne_mobile_8s"], linestyle='--', label="Moyenne mobile")
-        ax2.fill_between(df_pheno["Week"], df_pheno["IC_inf"], df_pheno["IC_sup"], color='gray', alpha=0.2, label="IC 95%")
-        outliers2 = df_pheno[df_pheno["OUTLIER"] == True]
-        ax2.scatter(outliers2["Week"], outliers2["Pourcentage"], color='darkred', label="Outliers", zorder=5)
-        ax2.set_title(f"Évolution du phénotype {pheno}")
-        ax2.set_xlabel("Semaine")
-        ax2.set_ylabel("% Présence")
-        ax2.legend()
-        ax2.grid(True)
-        st.pyplot(fig2)
+        df_pheno["Week"] = pd.to_numeric(df_pheno["Week"], errors='coerce')
+        df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
+        df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
+
+        fig2 = px.line(df_pheno, x="Week", y="Pourcentage", markers=True, title=f"Évolution du phénotype {pheno}",
+                       labels={"Week": "Semaine", "Pourcentage": "% Présence"},
+                       hover_data={"Pourcentage": ':.2f'})
+        fig2.update_traces(line=dict(width=3), hovertemplate="Semaine %{x}<br>% Présence: %{y:.2f}%")
+        fig2.update_layout(yaxis_title="% Présence", xaxis_title="Semaine")
+        st.plotly_chart(fig2, use_container_width=True)
 
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
@@ -87,7 +82,8 @@ elif menu == "Staphylococcus aureus":
             week_col = "Week" if "Week" in df_out.columns else "Semaine"
             if "OUTLIER" not in df_out.columns:
                 continue
-            weeks = df_out[df_out["OUTLIER"] == True][week_col].unique()
+            df_out[week_col] = pd.to_numeric(df_out[week_col], errors='coerce')
+            weeks = df_out[df_out["OUTLIER"] == True][week_col].dropna().unique()
             for w in weeks:
                 mask = (df_export['semaine'] == w)
                 if abx in df_export.columns:
