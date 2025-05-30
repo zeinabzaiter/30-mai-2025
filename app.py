@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import plotly.express as px
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Surveillance bactérienne", layout="wide")
 
@@ -16,13 +17,12 @@ df_export = pd.read_csv(export_file)
 df_export.columns = df_export.columns.str.strip()
 df_export['semaine'] = pd.to_numeric(df_export['semaine'], errors='coerce')
 
-# === Fichiers OUTLIER antibiotiques ===
-antibiotiques = {
-    "Vancomycine": os.path.join(DATA_FOLDER, "pctR_Vancomycin_analyse_2024.xlsx"),
-    "Teicoplanine": os.path.join(DATA_FOLDER, "pct_R_Teicoplanin_analyse_2024.xlsx"),
-    "Gentamycine": os.path.join(DATA_FOLDER, "pct_R_Gentamicin_analyse_2024.xlsx"),
-    "Oxacilline": os.path.join(DATA_FOLDER, "pct_R_Oxacillin_analyse_2024.xlsx")
-}
+# === Détecter tous les fichiers d'antibiotiques dynamiquement ===
+antibiotiques = {}
+for file in os.listdir(DATA_FOLDER):
+    if file.startswith("pct") and file.endswith(".xlsx"):
+        abx_name = file.replace("pctR_", "").replace("pct_R_", "").replace("pct", "").replace(".xlsx", "").capitalize()
+        antibiotiques[abx_name] = os.path.join(DATA_FOLDER, file)
 
 # === Fichiers phénotypes ===
 phenotypes = {
@@ -45,19 +45,54 @@ elif menu == "Staphylococcus aureus":
 
     with tab1:
         st.subheader("📈 Évolution hebdomadaire de la résistance")
-        abx = st.selectbox("Choisir un antibiotique", list(antibiotiques.keys()))
+        abx = st.selectbox("Choisir un antibiotique", sorted(antibiotiques.keys()))
         df_abx = pd.read_excel(antibiotiques[abx])
         week_col = "Week" if "Week" in df_abx.columns else "Semaine"
+
         df_abx[week_col] = pd.to_numeric(df_abx[week_col], errors='coerce')
         df_abx = df_abx.dropna(subset=[week_col, "Pourcentage"])
         df_abx["Pourcentage"] = df_abx["Pourcentage"].round(2)
 
-        fig = px.line(df_abx, x=week_col, y="Pourcentage", markers=True, title=f"Évolution de la résistance à {abx}",
-                      labels={week_col: "Semaine", "Pourcentage": "% Résistance"},
-                      hover_data={"Pourcentage": ':.2f'})
-        fig.update_traces(line=dict(width=3), hovertemplate="Semaine %{x}<br>% Résistance: %{y:.2f}%")
-        fig.update_layout(yaxis_title="% Résistance", xaxis_title="Semaine")
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["Pourcentage"],
+                                 mode="lines+markers",
+                                 name="% Résistance",
+                                 line=dict(width=3),
+                                 marker=dict(color="blue")))
+
+        if "Moyenne_mobile_8s" in df_abx.columns:
+            fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["Moyenne_mobile_8s"],
+                                     mode="lines",
+                                     name="Moyenne mobile",
+                                     line=dict(dash="dash", color="orange")))
+
+        if "IC_sup" in df_abx.columns:
+            fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["IC_sup"],
+                                     mode="lines",
+                                     name="Seuil IC 95%",
+                                     line=dict(dash="dot", color="gray")))
+
+        if "OUTLIER" in df_abx.columns:
+            outliers = df_abx[df_abx["OUTLIER"] == True]
+            fig.add_trace(go.Scatter(x=outliers[week_col], y=outliers["Pourcentage"],
+                                     mode="markers",
+                                     name="🔴 Alerte (OUTLIER)",
+                                     marker=dict(color="red", size=10)))
+
+        fig.update_layout(title=f"Évolution de la résistance à {abx}",
+                          xaxis_title="Semaine",
+                          yaxis_title="% Résistance",
+                          legend_title="Légende",
+                          hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("""
+        #### ℹ️ Définition des alertes :
+        - **Seuil IC 95%** : ligne pointillée grise = limite supérieure de confiance
+        - **🔴 OUTLIER** : % de résistance dépassant ce seuil → alerte
+        - **Moyenne mobile** : tendance glissante sur 8 semaines
+        """)
 
     with tab2:
         st.subheader("🧬 Évolution des phénotypes")
