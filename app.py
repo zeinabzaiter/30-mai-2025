@@ -129,7 +129,7 @@ elif menu == "Staphylococcus aureus":
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
 
-    with tab3:
+       with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
         alertes = []
         st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
@@ -153,11 +153,19 @@ elif menu == "Staphylococcus aureus":
                 for srv in df_alert['uf'].unique():
                     nb_r = df_alert[df_alert['uf'] == srv].shape[0]
                     alertes.append({
-                        "Semaine": int(w), "Service": srv, "Antibiotique": abx,
-                        "Nb_R": nb_r, "Alarme": "Oui"
+                        "Semaine": int(w),
+                        "Service": srv,
+                        "Antibiotique": abx,
+                        "Nb_R": nb_r,
+                        "Alarme": f"Semaine {int(w)} : Alerte pour {abx} dans le service {srv}"
                     })
 
         df_final_alertes = pd.DataFrame(alertes)
         st.dataframe(df_final_alertes, use_container_width=True)
+
         if not df_final_alertes.empty:
-            st.download_button("📥 Télécharger les alertes", data=df_final_alertes.to_csv(index=False), file_name="alertes_detectees.csv")
+            st.download_button(
+                "📥 Télécharger les alertes",
+                data=df_final_alertes.to_csv(index=False),
+                file_name="alertes_detectees.csv"
+            )
