@@ -128,45 +128,7 @@ elif menu == "Staphylococcus aureus":
         - **Moyenne mobile** : tendance glissante sur 8 semaines
         """)
 
-    with tab3:
-    st.subheader("Alertes croisées par semaine et service")
-    alertes = []
-    st.write("Colonnes dans le fichier d'export:", df_export.columns.tolist())
-
-    correspondance = {
-        "Gentamycine": "Gentamycine",
-        "Vancomycine": "Vancomycine",
-        "Teicoplanine": "Teicoplanine",
-        "Linezolide": "Linezolide",
-        "Daptomycine": "Daptomycine",
-        "Clindamycine": "Clindamycine",
-        "Oxacilline": "Oxacilline",
-        "Cotrimoxazole": "Cotrimoxazole",
-        "Dalbavancine": "Dalbavancine"
-    }
-
-    for abx, path in antibiotiques.items():
-        df_out = pd.read_excel(path)
-        week_col = "Week" if "Week" in df_out.columns else "Semaine"
-        if "OUTLIER" not in df_out.columns:
-            continue
-        df_out[week_col] = pd.to_numeric(df_out[week_col], errors='coerce')
-        weeks = df_out[df_out["OUTLIER"] == True][week_col].dropna().unique()
-
-        col_export = correspondance.get(abx, abx)
-        if col_export not in df_export.columns:
-            st.warning(f"⚠️ L'antibiotique '{col_export}' n'existe pas dans les colonnes du fichier d'export.")
-            continue
-
-        for w in weeks:
-            mask = (df_export['semaine'] == w)
-            resist = (df_export[col_export] == 'R')
-            df_alert = df_export[mask & resist]
-            for srv in df_alert['uf'].unique():
-                nb_r = df_alert[df_alert['uf'] == srv].shape[0]
-                alertes.append({
-                    "Semaine": int(w),
-                    "Service": srv,
+    
                     "Antibiotique": col_export,
                     "Nb_R": nb_r,
                     "Alarme": f"Semaine {int(w)} : Alerte pour {col_export} dans le service {srv}"
