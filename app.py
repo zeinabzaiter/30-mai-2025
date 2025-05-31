@@ -35,7 +35,7 @@ if menu == "Vue globale":
     st.dataframe(bacteries_df, use_container_width=True)
 
 elif menu == "Staphylococcus aureus":
-    st.title("🦠 Surveillance : Staphylococcus aureus")
+    st.title("🥠 Surveillance : Staphylococcus aureus")
     tab1, tab2, tab3 = st.tabs(["Antibiotiques", "Phénotypes", "Alertes semaine/service"])
 
     semaine_min = int(df_export["semaine"].min())
@@ -78,8 +78,7 @@ elif menu == "Staphylococcus aureus":
         fig.update_layout(title=f"Évolution de la résistance à {abx}", xaxis_title="Semaine", yaxis_title="% Résistance", legend_title="Légende", hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Camembert - Répartition des Résistances
-        st.subheader("🧩 Répartition des Résistances (camembert)")
+        st.subheader("🥉 Répartition des Résistances (camembert)")
         if abx.capitalize() in df_export.columns:
             pie_df = df_export[(df_export["semaine"] >= semaine_range[0]) & (df_export["semaine"] <= semaine_range[1])]
             pie_counts = pie_df[abx.capitalize()].value_counts().reset_index()
@@ -114,6 +113,14 @@ elif menu == "Staphylococcus aureus":
 
         fig2.update_layout(title=f"Évolution du phénotype {pheno}", xaxis_title="Semaine", yaxis_title="% Présence", legend_title="Légende", hovermode="x unified")
         st.plotly_chart(fig2, use_container_width=True)
+
+        # Camembert - Répartition phénotype
+        st.subheader("🥉 Répartition du phénotype (camembert)")
+        pie_pheno = df_pheno[(df_pheno["Week"] >= semaine_range[0]) & (df_pheno["Week"] <= semaine_range[1])]
+        total = pie_pheno["Pourcentage"].sum()
+        pie_data = pd.DataFrame({"Label": [pheno, "Autres"], "Valeur": [total, 100 - total]})
+        fig_pie2 = px.pie(pie_data, names="Label", values="Valeur", title=f"Distribution de {pheno}")
+        st.plotly_chart(fig_pie2)
 
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
@@ -169,4 +176,4 @@ elif menu == "Staphylococcus aureus":
         st.dataframe(df_final_alertes, use_container_width=True)
 
         if not df_final_alertes.empty:
-            st.download_button("📥 Télécharger les alertes", data=df_final_alertes.to_csv(index=False), file_name="alertes_detectees.csv")
+            st.download_button("📅 Télécharger les alertes", data=df_final_alertes.to_csv(index=False), file_name="alertes_detectees.csv")
