@@ -177,3 +177,77 @@ elif menu == "Staphylococcus aureus":
 
         if not df_final_alertes.empty:
             st.download_button("📅 Télécharger les alertes", data=df_final_alertes.to_csv(index=False), file_name="alertes_detectees.csv")
+import streamlit as st
+import pandas as pd
+import os
+import plotly.graph_objects as go
+import plotly.express as px
+
+st.set_page_config(page_title="Surveillance bactérienne", layout="wide")
+
+DATA_FOLDER = "data"
+bacteries_file = os.path.join(DATA_FOLDER, "TOUS les bacteries a etudier.xlsx")
+export_file = os.path.join(DATA_FOLDER, "Export_StaphAureus_COMPLET.csv")
+
+bacteries_df = pd.read_excel(bacteries_file)
+df_export = pd.read_csv(export_file)
+df_export.columns = df_export.columns.str.strip()
+df_export['semaine'] = pd.to_numeric(df_export['semaine'], errors='coerce')
+
+antibiotiques = {}
+for file in os.listdir(DATA_FOLDER):
+    if file.startswith("pct") and file.endswith(".xlsx"):
+        abx_name = file.replace("pctR_", "").replace("pct_R_", "").replace("pct", "").replace(".xlsx", "").capitalize()
+        antibiotiques[abx_name] = os.path.join(DATA_FOLDER, file)
+
+phenotypes = {
+    "MRSA": os.path.join(DATA_FOLDER, "MRSA_analyse.xlsx"),
+    "VRSA": os.path.join(DATA_FOLDER, "VRSA_analyse.xlsx"),
+    "Wild": os.path.join(DATA_FOLDER, "Wild_analyse.xlsx"),
+    "Other": os.path.join(DATA_FOLDER, "Other_analyse.xlsx")
+}
+
+menu = st.sidebar.radio("Navigation", ["Vue globale", "Staphylococcus aureus", "Répartition globale"])
+
+if menu == "Vue globale":
+    st.title("📋 Bactéries à surveiller")
+    st.dataframe(bacteries_df, use_container_width=True)
+
+elif menu == "Répartition globale":
+    st.title("🥧 Répartition globale (camemberts)")
+
+    semaine_min = int(df_export["semaine"].min())
+    semaine_max = int(df_export["semaine"].max())
+    semaine_range = st.slider(
+        "Filtrer par plage de semaines :",
+        min_value=semaine_min,
+        max_value=semaine_max,
+        value=(semaine_min, semaine_max),
+        step=1
+    )
+
+    filtered_df = df_export[(df_export["semaine"] >= semaine_range[0]) & (df_export["semaine"] <= semaine_range[1])]
+
+    st.subheader("🦠 Camembert des résultats antibiotiques")
+    abx_to_plot = [col for col in filtered_df.columns if col not in ["semaine", "uf"] and filtered_df[col].dtype == object]
+    selected_abx = st.selectbox("Choisir un antibiotique à visualiser :", abx_to_plot)
+
+    if selected_abx in filtered_df.columns:
+        abx_counts = filtered_df[selected_abx].value_counts().reset_index()
+        abx_counts.columns = ["Résultat", "Nombre"]
+        fig_abx_pie = px.pie(abx_counts, names="Résultat", values="Nombre", title=f"Distribution de {selected_abx}")
+        st.plotly_chart(fig_abx_pie, use_container_width=True)
+
+    st.subheader("🧬 Camembert des phénotypes")
+    pheno_counts = filtered_df['Phenotype'].value_counts().reset_index() if 'Phenotype' in filtered_df.columns else pd.DataFrame(columns=['index', 'Phenotype'])
+    if not pheno_counts.empty:
+        pheno_counts.columns = ["Phénotype", "Nombre"]
+        fig_pheno_pie = px.pie(pheno_counts, names="Phénotype", values="Nombre", title="Distribution des phénotypes")
+        st.plotly_chart(fig_pheno_pie, use_container_width=True)
+    else:
+        st.info("Aucune colonne 'Phenotype' trouvée dans les données exportées.")
+
+# Le reste de l'application continue avec "Staphylococcus aureus" (inchangé)
+
+elif menu == "Staphylococcus aureus":
+    # ... le reste du code existant continue ici ...
