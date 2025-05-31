@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import plotly.graph_objects as go
+import plotly.express as px
 
 st.set_page_config(page_title="Surveillance bactérienne", layout="wide")
 
@@ -37,6 +38,16 @@ elif menu == "Staphylococcus aureus":
     st.title("🦠 Surveillance : Staphylococcus aureus")
     tab1, tab2, tab3 = st.tabs(["Antibiotiques", "Phénotypes", "Alertes semaine/service"])
 
+    semaine_min = int(df_export["semaine"].min())
+    semaine_max = int(df_export["semaine"].max())
+    semaine_range = st.slider(
+        "Filtrer par plage de semaines :",
+        min_value=semaine_min,
+        max_value=semaine_max,
+        value=(semaine_min, semaine_max),
+        step=1
+    )
+
     with tab1:
         st.subheader("📈 Évolution hebdomadaire de la résistance")
         abx = st.selectbox("Choisir un antibiotique", sorted(antibiotiques.keys()))
@@ -45,6 +56,7 @@ elif menu == "Staphylococcus aureus":
 
         df_abx[week_col] = pd.to_numeric(df_abx[week_col], errors='coerce')
         df_abx = df_abx.dropna(subset=[week_col, "Pourcentage"])
+        df_abx = df_abx[(df_abx[week_col] >= semaine_range[0]) & (df_abx[week_col] <= semaine_range[1])]
         df_abx["Pourcentage"] = df_abx["Pourcentage"].round(2)
 
         fig = go.Figure()
@@ -66,12 +78,22 @@ elif menu == "Staphylococcus aureus":
         fig.update_layout(title=f"Évolution de la résistance à {abx}", xaxis_title="Semaine", yaxis_title="% Résistance", legend_title="Légende", hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
 
+        # Camembert - Répartition des Résistances
+        st.subheader("🧩 Répartition des Résistances (camembert)")
+        if abx.capitalize() in df_export.columns:
+            pie_df = df_export[(df_export["semaine"] >= semaine_range[0]) & (df_export["semaine"] <= semaine_range[1])]
+            pie_counts = pie_df[abx.capitalize()].value_counts().reset_index()
+            pie_counts.columns = ["Résultat", "Nombre"]
+            fig_pie = px.pie(pie_counts, names="Résultat", values="Nombre", title=f"Distribution {abx.capitalize()}")
+            st.plotly_chart(fig_pie)
+
     with tab2:
         st.subheader("🧬 Évolution des phénotypes")
         pheno = st.selectbox("Choisir un phénotype", list(phenotypes.keys()))
         df_pheno = pd.read_excel(phenotypes[pheno])
         df_pheno["Week"] = pd.to_numeric(df_pheno["Week"], errors='coerce')
         df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
+        df_pheno = df_pheno[(df_pheno["Week"] >= semaine_range[0]) & (df_pheno["Week"] <= semaine_range[1])]
         df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
 
         fig2 = go.Figure()
@@ -115,6 +137,7 @@ elif menu == "Staphylococcus aureus":
             df_out = pd.read_excel(path)
             week_col = "Week" if "Week" in df_out.columns else "Semaine"
             df_out[week_col] = pd.to_numeric(df_out[week_col], errors='coerce')
+            df_out = df_out[(df_out[week_col] >= semaine_range[0]) & (df_out[week_col] <= semaine_range[1])]
 
             if abx.lower() == "vancomycine":
                 weeks = df_out[df_out["Pourcentage"] > 0][week_col].dropna().unique()
