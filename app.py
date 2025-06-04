@@ -131,7 +131,7 @@ elif menu == "Staphylococcus aureus":
                                       marker=dict(color="red", size=10)))
 
         fig2.update_layout(title=f"Évolution du phénotype {pheno}",
-                           xaxis_title="Semaine", yaxis_title="% Présence",
+                           xaxis_title="Semaine", yaxis_title="% Phenotype",
                            legend_title="Légende", hovermode="x unified")
         st.plotly_chart(fig2, use_container_width=True)
 
