@@ -10,11 +10,13 @@ DATA_FOLDER = "data"
 bacteries_file = os.path.join(DATA_FOLDER, "TOUS les bacteries a etudier.xlsx")
 export_file = os.path.join(DATA_FOLDER, "Export_StaphAureus_COMPLET.csv")
 
+# Lecture des données globales
 bacteries_df = pd.read_excel(bacteries_file)
 df_export = pd.read_csv(export_file)
 df_export.columns = df_export.columns.str.strip()
 df_export['semaine'] = pd.to_numeric(df_export['semaine'], errors='coerce')
 
+# Construction du dictionnaire des fichiers antibiotiques
 antibiotiques = {}
 for file in os.listdir(DATA_FOLDER):
     if file.startswith("pct") and file.endswith(".xlsx"):
@@ -27,6 +29,7 @@ for file in os.listdir(DATA_FOLDER):
         )
         antibiotiques[abx_name] = os.path.join(DATA_FOLDER, file)
 
+# Chemins vers les fichiers de phénotypes
 phenotypes = {
     "MRSA": os.path.join(DATA_FOLDER, "MRSA_analyse.xlsx"),
     "VRSA": os.path.join(DATA_FOLDER, "VRSA_analyse.xlsx"),
@@ -34,6 +37,7 @@ phenotypes = {
     "Other": os.path.join(DATA_FOLDER, "Other_analyse.xlsx")
 }
 
+# Menu latéral
 menu = st.sidebar.radio(
     "Navigation",
     ["Vue globale", "Staphylococcus aureus", "Répartition globale"]
@@ -110,6 +114,7 @@ elif menu == "Staphylococcus aureus":
         ["Antibiotiques", "Phénotypes", "Alertes semaine/service"]
     )
 
+    # Onglet 1 : évolution hebdomadaire de la résistance aux antibiotiques
     with tab1:
         st.subheader("📈 Évolution hebdomadaire de la résistance")
         abx = st.selectbox(
@@ -157,24 +162,22 @@ elif menu == "Staphylococcus aureus":
                 marker=dict(color="red", size=10)
             ))
 
-        # Mise à jour du layout avec augmentation de la taille des textes
         fig.update_layout(
             title=f"Évolution de la résistance à {abx}",
-            legend=dict(
-                font=dict(size=16)            # Taille de la légende
-            ),
+            legend=dict(font=dict(size=16)),
             xaxis=dict(
-                title=dict(text="Semaine", font=dict(size=18)),  # Titre axe X en taille 18
-                tickfont=dict(size=14)                            # Graduations axe X en taille 14
+                title=dict(text="Semaine", font=dict(size=18)),
+                tickfont=dict(size=14)
             ),
             yaxis=dict(
-                title=dict(text="% Résistance", font=dict(size=18)),  # Titre axe Y en taille 18
-                tickfont=dict(size=14)                                  # Graduations axe Y en taille 14
+                title=dict(text="% Résistance", font=dict(size=18)),
+                tickfont=dict(size=14)
             ),
             hovermode="x unified"
         )
         st.plotly_chart(fig, use_container_width=True)
 
+    # Onglet 2 : évolution des phénotypes (avec règle spéciale pour VRSA)
     with tab2:
         st.subheader("🧬 Évolution des phénotypes")
         pheno = st.selectbox(
@@ -186,16 +189,16 @@ elif menu == "Staphylococcus aureus":
         df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
         df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
 
-        # --- Spécial VRSA : on ne veut pas la moyenne mobile / IC_sup,
-        # mais une alerte dès qu'il y a au moins un cas (Pourcentage > 0) ---
+        # Si le phénotype est VRSA : on veut *uniquement* une alerte dès que Pourcentage > 0
         if pheno == "VRSA":
-            # On définit une colonne OUTLIER = True dès que Pourcentage > 0
+            # On force OUTLIER = True si Pourcentage > 0, sinon False
             df_pheno["OUTLIER"] = df_pheno["Pourcentage"] > 0
-        # Pour les autres phénotypes, on garde l'OUTLIER calculé dans le fichier Excel
-        # et on trace éventuellement la moyenne mobile et IC_sup si elles existent.
+        # Pour les autres phénotypes, on suppose que le fichier Excel contient déjà OUTLIER,
+        # Moyenne_mobile_8s et IC_sup de façon pré-calculée.
 
         fig2 = go.Figure()
-        # Tracé principal : % du phénotype
+
+        # Trace du pourcentage du phénotype
         fig2.add_trace(go.Scatter(
             x=df_pheno["Week"],
             y=df_pheno["Pourcentage"],
@@ -204,7 +207,7 @@ elif menu == "Staphylococcus aureus":
             line=dict(width=3, color="blue")
         ))
 
-        # Si ce n'est pas VRSA, on ajoute la moyenne mobile et le seuil IC_sup
+        # Si ce n'est pas VRSA, on ajoute la moyenne mobile et le seuil d'IC
         if pheno != "VRSA":
             if "Moyenne_mobile_8s" in df_pheno.columns:
                 fig2.add_trace(go.Scatter(
@@ -223,7 +226,7 @@ elif menu == "Staphylococcus aureus":
                     line=dict(dash="dot", color="gray")
                 ))
 
-        # Toujours tracer les alertes : pour VRSA, OUTLIER indique Pourcentage > 0
+        # Trace des alertes (pourcentage > 0 pour VRSA, ou OUTLIER prédéfini pour les autres)
         if "OUTLIER" in df_pheno.columns:
             outliers = df_pheno[df_pheno["OUTLIER"] == True]
             fig2.add_trace(go.Scatter(
@@ -234,24 +237,22 @@ elif menu == "Staphylococcus aureus":
                 marker=dict(color="red", size=10)
             ))
 
-        # Mise à jour du layout avec augmentation de la taille des textes
         fig2.update_layout(
             title=f"Évolution du phénotype {pheno}",
-            legend=dict(
-                font=dict(size=16)            # Taille de la légende
-            ),
+            legend=dict(font=dict(size=16)),
             xaxis=dict(
-                title=dict(text="Semaine", font=dict(size=18)),  # Titre axe X en taille 18
-                tickfont=dict(size=14)                            # Graduations axe X en taille 14
+                title=dict(text="Semaine", font=dict(size=18)),
+                tickfont=dict(size=14)
             ),
             yaxis=dict(
-                title=dict(text=f"% {pheno}", font=dict(size=18)),  # Titre axe Y dynamique en taille 18
-                tickfont=dict(size=14)                                # Graduations axe Y en taille 14
+                title=dict(text=f"% {pheno}", font=dict(size=18)),
+                tickfont=dict(size=14)
             ),
             hovermode="x unified"
         )
         st.plotly_chart(fig2, use_container_width=True)
 
+    # Onglet 3 : alertes croisées par semaine et service
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
         alertes = []
