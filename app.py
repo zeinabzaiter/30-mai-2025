@@ -163,98 +163,139 @@ elif menu == "Staphylococcus aureus":
             ))
 
         fig.update_layout(
-            title=f"Évolution de la résistance à {abx}",
-            legend=dict(font=dict(size=16)),
+            title=dict(text=f"Évolution de la résistance à {abx}", font=dict(size=24, family="Arial Black")),
+            legend=dict(font=dict(size=20, family="Arial Black")),
             xaxis=dict(
-                title=dict(text="Semaine", font=dict(size=18)),
-                tickfont=dict(size=14)
+                title=dict(text="Semaine", font=dict(size=22, family="Arial Black")),
+                tickfont=dict(size=18, family="Arial Black")
             ),
             yaxis=dict(
-                title=dict(text="% Résistance", font=dict(size=18)),
-                tickfont=dict(size=14)
+                title=dict(text="% Résistance", font=dict(size=22, family="Arial Black")),
+                tickfont=dict(size=18, family="Arial Black")
             ),
             hovermode="x unified"
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # Onglet 2 : évolution des phénotypes (avec règle spéciale pour VRSA)
+    # Onglet 2 : évolution des phénotypes
     with tab2:
         st.subheader("🧬 Évolution des phénotypes")
-        pheno = st.selectbox(
-            "Choisir un phénotype",
-            list(phenotypes.keys())
-        )
-        df_pheno = pd.read_excel(phenotypes[pheno])
-        df_pheno["Week"] = pd.to_numeric(df_pheno["Week"], errors='coerce')
-        df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
-        df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
+        show_all = st.checkbox("Afficher tous les phénotypes dans le même graphique", value=False)
 
-        # Si le phénotype est VRSA : on veut *uniquement* une alerte dès que Pourcentage > 0
-        if pheno == "VRSA":
-            # On ne garde que Week et Pourcentage, supprimer Moyenne_mobile_8s et IC_sup
-            df_pheno = df_pheno.loc[:, ["Week", "Pourcentage"]].copy()
-            # ON DEFINIT OUTLIER = True dès que Pourcentage > 0
-            df_pheno["OUTLIER"] = df_pheno["Pourcentage"] > 0
+        if show_all:
+            # Chargement de tous les phénotypes
+            fig_all = go.Figure()
+            couleurs = {"MRSA": "blue", "VRSA": "red", "Wild": "green", "Other": "purple"}
+            for pheno, path in phenotypes.items():
+                df_ph = pd.read_excel(path)
+                df_ph["Week"] = pd.to_numeric(df_ph["Week"], errors='coerce')
+                df_ph = df_ph.dropna(subset=["Week", "Pourcentage"])
+                df_ph["Pourcentage"] = df_ph["Pourcentage"].round(2)
+
+                # Pour VRSA, définir OUTLIER quand Pourcentage > 0
+                if pheno == "VRSA":
+                    df_ph = df_ph.loc[:, ["Week", "Pourcentage"]].copy()
+                    df_ph["OUTLIER"] = df_ph["Pourcentage"] > 0
+
+                # Tracé du % phénotype
+                fig_all.add_trace(go.Scatter(
+                    x=df_ph["Week"],
+                    y=df_ph["Pourcentage"],
+                    mode="lines+markers",
+                    name=f"<b>% {pheno}</b>",
+                    line=dict(width=3, color=couleurs[pheno]),
+                    marker=dict(size=8)
+                ))
+
+                # Ajout des alertes pour chaque phénotype
+                if "OUTLIER" in df_ph.columns:
+                    out_df = df_ph[df_ph["OUTLIER"] == True]
+                    fig_all.add_trace(go.Scatter(
+                        x=out_df["Week"],
+                        y=out_df["Pourcentage"],
+                        mode="markers",
+                        name=f"<b>🔴 Alerte {pheno}</b>",
+                        marker=dict(color="black", size=12, symbol="circle-open")
+                    ))
+
+            fig_all.update_layout(
+                title=dict(text="Évolution comparée des 4 phénotypes", font=dict(size=26, family="Arial Black")),
+                legend=dict(font=dict(size=20, family="Arial Black")),
+                xaxis=dict(
+                    title=dict(text="Semaine", font=dict(size=24, family="Arial Black")),
+                    tickfont=dict(size=18, family="Arial Black")
+                ),
+                yaxis=dict(
+                    title=dict(text="% Phénotype", font=dict(size=24, family="Arial Black")),
+                    tickfont=dict(size=18, family="Arial Black")
+                ),
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig_all, use_container_width=True)
+
         else:
-            # Pour les autres, on garde éventuellement Moyenne_mobile_8s, IC_sup et OUTLIER déjà dans le fichier
-            # (on ne modifie pas df_pheno dans ce cas)
-            pass
+            # Affichage d'un seul phénotype (comportement précédent)
+            pheno = st.selectbox("Choisir un phénotype", list(phenotypes.keys()))
+            df_pheno = pd.read_excel(phenotypes[pheno])
+            df_pheno["Week"] = pd.to_numeric(df_pheno["Week"], errors='coerce')
+            df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
+            df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
 
-        fig2 = go.Figure()
+            if pheno == "VRSA":
+                df_pheno = df_pheno.loc[:, ["Week", "Pourcentage"]].copy()
+                df_pheno["OUTLIER"] = df_pheno["Pourcentage"] > 0
 
-        # Trace principale : % du phénotype
-        fig2.add_trace(go.Scatter(
-            x=df_pheno["Week"],
-            y=df_pheno["Pourcentage"],
-            mode="lines+markers",
-            name=f"% {pheno}",
-            line=dict(width=3, color="blue")
-        ))
-
-        # Si ce n'est pas VRSA, on ajoute Moyenne_mobile_8s et IC_sup (si elles existent)
-        if pheno != "VRSA":
-            if "Moyenne_mobile_8s" in df_pheno.columns:
-                fig2.add_trace(go.Scatter(
-                    x=df_pheno["Week"],
-                    y=df_pheno["Moyenne_mobile_8s"],
-                    mode="lines",
-                    name="Moyenne mobile",
-                    line=dict(dash="dash", color="orange")
-                ))
-            if "IC_sup" in df_pheno.columns:
-                fig2.add_trace(go.Scatter(
-                    x=df_pheno["Week"],
-                    y=df_pheno["IC_sup"],
-                    mode="lines",
-                    name="Seuil IC 95%",
-                    line=dict(dash="dot", color="gray")
-                ))
-
-        # Trace des alertes : pour VRSA c'est Pourcentage > 0, pour les autres c'est OUTLIER du fichier
-        if "OUTLIER" in df_pheno.columns:
-            outliers = df_pheno[df_pheno["OUTLIER"] == True]
+            fig2 = go.Figure()
             fig2.add_trace(go.Scatter(
-                x=outliers["Week"],
-                y=outliers["Pourcentage"],
-                mode="markers",
-                name="🔴 Alerte",
-                marker=dict(color="red", size=10)
+                x=df_pheno["Week"],
+                y=df_pheno["Pourcentage"],
+                mode="lines+markers",
+                name=f"% {pheno}",
+                line=dict(width=3, color="blue")
             ))
 
-        fig2.update_layout(
-            title=f"Évolution du phénotype {pheno}",
-            legend=dict(font=dict(size=16)),
-            xaxis=dict(
-                title=dict(text="Semaine", font=dict(size=18)),
-                tickfont=dict(size=14)
-            ),
-            yaxis=dict(
-                title=dict(text=f"% {pheno}", font=dict(size=18)),
-                tickfont=dict(size=14)
-            ),
-            hovermode="x unified"
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+            if pheno != "VRSA":
+                if "Moyenne_mobile_8s" in df_pheno.columns:
+                    fig2.add_trace(go.Scatter(
+                        x=df_pheno["Week"],
+                        y=df_pheno["Moyenne_mobile_8s"],
+                        mode="lines",
+                        name="Moyenne mobile",
+                        line=dict(dash="dash", color="orange")
+                    ))
+                if "IC_sup" in df_pheno.columns:
+                    fig2.add_trace(go.Scatter(
+                        x=df_pheno["Week"],
+                        y=df_pheno["IC_sup"],
+                        mode="lines",
+                        name="Seuil IC 95%",
+                        line=dict(dash="dot", color="gray")
+                    ))
+
+            if "OUTLIER" in df_pheno.columns:
+                outliers = df_pheno[df_pheno["OUTLIER"] == True]
+                fig2.add_trace(go.Scatter(
+                    x=outliers["Week"],
+                    y=outliers["Pourcentage"],
+                    mode="markers",
+                    name="🔴 Alerte",
+                    marker=dict(color="red", size=10)
+                ))
+
+            fig2.update_layout(
+                title=dict(text=f"Évolution du phénotype {pheno}", font=dict(size=24, family="Arial Black")),
+                legend=dict(font=dict(size=20, family="Arial Black")),
+                xaxis=dict(
+                    title=dict(text="Semaine", font=dict(size=22, family="Arial Black")),
+                    tickfont=dict(size=18, family="Arial Black")
+                ),
+                yaxis=dict(
+                    title=dict(text=f"% {pheno}", font=dict(size=22, family="Arial Black")),
+                    tickfont=dict(size=18, family="Arial Black")
+                ),
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig2, use_container_width=True)
 
     # Onglet 3 : alertes croisées par semaine et service
     with tab3:
