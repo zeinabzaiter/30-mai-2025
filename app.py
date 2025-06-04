@@ -130,9 +130,23 @@ elif menu == "Staphylococcus aureus":
                                       mode="markers", name="🔴 Alerte",
                                       marker=dict(color="red", size=10)))
 
-        fig2.update_layout(title=f"Évolution du phénotype {pheno}",
-                           xaxis_title="Semaine", yaxis_title="% Phenotype",
-                           legend_title="Légende", hovermode="x unified")
+        # NOUVEAU code dans with tab2 (taille légende, titres, ticks agrandis)
+fig2.update_layout(
+    title=f"Évolution du phénotype {pheno}",
+    legend=dict(
+        font=dict(size=16)             # ↑ Taille de la légende (texte des courbes)
+    ),
+    xaxis=dict(
+        title=dict(text="Semaine", font=dict(size=18)),  # ↑ Titre axe X en taille 18
+        tickfont=dict(size=14)                            # ↑ Taille des graduations (ticks) axe X
+    ),
+    yaxis=dict(
+        title=dict(text="% Phénotype", font=dict(size=18)),  # ↑ Titre axe Y en taille 18
+        tickfont=dict(size=14)                                # ↑ Taille des ticks axe Y
+    ),
+    hovermode="x unified"
+)
+
         st.plotly_chart(fig2, use_container_width=True)
 
     with tab3:
