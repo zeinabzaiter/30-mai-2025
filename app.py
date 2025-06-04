@@ -186,30 +186,44 @@ elif menu == "Staphylococcus aureus":
         df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
         df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
 
+        # --- Spécial VRSA : on ne veut pas la moyenne mobile / IC_sup,
+        # mais une alerte dès qu'il y a au moins un cas (Pourcentage > 0) ---
+        if pheno == "VRSA":
+            # On définit une colonne OUTLIER = True dès que Pourcentage > 0
+            df_pheno["OUTLIER"] = df_pheno["Pourcentage"] > 0
+        # Pour les autres phénotypes, on garde l'OUTLIER calculé dans le fichier Excel
+        # et on trace éventuellement la moyenne mobile et IC_sup si elles existent.
+
         fig2 = go.Figure()
+        # Tracé principal : % du phénotype
         fig2.add_trace(go.Scatter(
             x=df_pheno["Week"],
             y=df_pheno["Pourcentage"],
             mode="lines+markers",
-            name=f"% {pheno}",  # Libellé dynamique selon le phénotype choisi
+            name=f"% {pheno}",
             line=dict(width=3, color="blue")
         ))
-        if "Moyenne_mobile_8s" in df_pheno.columns:
-            fig2.add_trace(go.Scatter(
-                x=df_pheno["Week"],
-                y=df_pheno["Moyenne_mobile_8s"],
-                mode="lines",
-                name="Moyenne mobile",
-                line=dict(dash="dash", color="orange")
-            ))
-        if "IC_sup" in df_pheno.columns:
-            fig2.add_trace(go.Scatter(
-                x=df_pheno["Week"],
-                y=df_pheno["IC_sup"],
-                mode="lines",
-                name="Seuil IC 95%",
-                line=dict(dash="dot", color="gray")
-            ))
+
+        # Si ce n'est pas VRSA, on ajoute la moyenne mobile et le seuil IC_sup
+        if pheno != "VRSA":
+            if "Moyenne_mobile_8s" in df_pheno.columns:
+                fig2.add_trace(go.Scatter(
+                    x=df_pheno["Week"],
+                    y=df_pheno["Moyenne_mobile_8s"],
+                    mode="lines",
+                    name="Moyenne mobile",
+                    line=dict(dash="dash", color="orange")
+                ))
+            if "IC_sup" in df_pheno.columns:
+                fig2.add_trace(go.Scatter(
+                    x=df_pheno["Week"],
+                    y=df_pheno["IC_sup"],
+                    mode="lines",
+                    name="Seuil IC 95%",
+                    line=dict(dash="dot", color="gray")
+                ))
+
+        # Toujours tracer les alertes : pour VRSA, OUTLIER indique Pourcentage > 0
         if "OUTLIER" in df_pheno.columns:
             outliers = df_pheno[df_pheno["OUTLIER"] == True]
             fig2.add_trace(go.Scatter(
