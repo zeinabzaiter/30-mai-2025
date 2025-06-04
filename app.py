@@ -114,7 +114,7 @@ elif menu == "Staphylococcus aureus":
 
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(x=df_pheno["Week"], y=df_pheno["Pourcentage"],
-                                  mode="lines+markers", name="% Présence",
+                                  mode="lines+markers", name="% Phenotype",
                                   line=dict(width=3, color="blue")))
         if "Moyenne_mobile_8s" in df_pheno.columns:
             fig2.add_trace(go.Scatter(x=df_pheno["Week"], y=df_pheno["Moyenne_mobile_8s"],
