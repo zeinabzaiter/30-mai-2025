@@ -191,14 +191,18 @@ elif menu == "Staphylococcus aureus":
 
         # Si le phénotype est VRSA : on veut *uniquement* une alerte dès que Pourcentage > 0
         if pheno == "VRSA":
-            # On force OUTLIER = True si Pourcentage > 0, sinon False
+            # On ne garde que Week et Pourcentage, supprimer Moyenne_mobile_8s et IC_sup
+            df_pheno = df_pheno.loc[:, ["Week", "Pourcentage"]].copy()
+            # ON DEFINIT OUTLIER = True dès que Pourcentage > 0
             df_pheno["OUTLIER"] = df_pheno["Pourcentage"] > 0
-        # Pour les autres phénotypes, on suppose que le fichier Excel contient déjà OUTLIER,
-        # Moyenne_mobile_8s et IC_sup de façon pré-calculée.
+        else:
+            # Pour les autres, on garde éventuellement Moyenne_mobile_8s, IC_sup et OUTLIER déjà dans le fichier
+            # (on ne modifie pas df_pheno dans ce cas)
+            pass
 
         fig2 = go.Figure()
 
-        # Trace du pourcentage du phénotype
+        # Trace principale : % du phénotype
         fig2.add_trace(go.Scatter(
             x=df_pheno["Week"],
             y=df_pheno["Pourcentage"],
@@ -207,7 +211,7 @@ elif menu == "Staphylococcus aureus":
             line=dict(width=3, color="blue")
         ))
 
-        # Si ce n'est pas VRSA, on ajoute la moyenne mobile et le seuil d'IC
+        # Si ce n'est pas VRSA, on ajoute Moyenne_mobile_8s et IC_sup (si elles existent)
         if pheno != "VRSA":
             if "Moyenne_mobile_8s" in df_pheno.columns:
                 fig2.add_trace(go.Scatter(
@@ -226,7 +230,7 @@ elif menu == "Staphylococcus aureus":
                     line=dict(dash="dot", color="gray")
                 ))
 
-        # Trace des alertes (pourcentage > 0 pour VRSA, ou OUTLIER prédéfini pour les autres)
+        # Trace des alertes : pour VRSA c'est Pourcentage > 0, pour les autres c'est OUTLIER du fichier
         if "OUTLIER" in df_pheno.columns:
             outliers = df_pheno[df_pheno["OUTLIER"] == True]
             fig2.add_trace(go.Scatter(
