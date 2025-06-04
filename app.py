@@ -131,7 +131,7 @@ elif menu == "Staphylococcus aureus":
                                       marker=dict(color="red", size=10)))
 
             # NOUVEAU code dans with tab2 (taille légende, titres, ticks agrandis)
-            fig2.update_layout(title=f"Évolution du phénotype {pheno}",legend=dict(font=dict(size=16)),xaxis=dict(title=dict(text="Semaine", font=dict(size=18)),tickfont=dict(size=14)yaxis=dict(
+            fig2.update_layout(title=f"Évolution du phénotype {pheno}",legend=dict(font=dict(size=16)),xaxis=dict(title=dict(text="Semaine", font=dict(size=18)),tickfont=dict(size=14),yaxis=dict(
         title=dict(text="% Phénotype", font=dict(size=18)),tickfont=dict(size=14)),hovermode="x unified")
 
 
