@@ -18,7 +18,13 @@ df_export['semaine'] = pd.to_numeric(df_export['semaine'], errors='coerce')
 antibiotiques = {}
 for file in os.listdir(DATA_FOLDER):
     if file.startswith("pct") and file.endswith(".xlsx"):
-        abx_name = file.replace("pctR_", "").replace("pct_R_", "").replace("pct", "").replace(".xlsx", "").capitalize()
+        abx_name = (
+            file.replace("pctR_", "")
+                .replace("pct_R_", "")
+                .replace("pct", "")
+                .replace(".xlsx", "")
+                .capitalize()
+        )
         antibiotiques[abx_name] = os.path.join(DATA_FOLDER, file)
 
 phenotypes = {
@@ -28,7 +34,10 @@ phenotypes = {
     "Other": os.path.join(DATA_FOLDER, "Other_analyse.xlsx")
 }
 
-menu = st.sidebar.radio("Navigation", ["Vue globale", "Staphylococcus aureus", "Répartition globale"])
+menu = st.sidebar.radio(
+    "Navigation",
+    ["Vue globale", "Staphylococcus aureus", "Répartition globale"]
+)
 
 if menu == "Vue globale":
     st.title("📋 Bactéries à surveiller")
@@ -47,34 +56,66 @@ elif menu == "Répartition globale":
         step=1
     )
 
-    filtered_df = df_export[(df_export["semaine"] >= semaine_range[0]) & (df_export["semaine"] <= semaine_range[1])]
+    filtered_df = df_export[
+        (df_export["semaine"] >= semaine_range[0]) &
+        (df_export["semaine"] <= semaine_range[1])
+    ]
 
     st.subheader("🦠 Camembert des résultats antibiotiques")
-    abx_to_plot = [col for col in filtered_df.columns if col not in ["semaine", "uf"] and filtered_df[col].dtype == object]
-    selected_abx = st.selectbox("Choisir un antibiotique à visualiser :", abx_to_plot)
+    abx_to_plot = [
+        col for col in filtered_df.columns
+        if col not in ["semaine", "uf"] and filtered_df[col].dtype == object
+    ]
+    selected_abx = st.selectbox(
+        "Choisir un antibiotique à visualiser :",
+        abx_to_plot
+    )
 
     if selected_abx in filtered_df.columns:
-        abx_counts = filtered_df[selected_abx].value_counts().reset_index()
+        abx_counts = (
+            filtered_df[selected_abx]
+            .value_counts()
+            .reset_index()
+        )
         abx_counts.columns = ["Résultat", "Nombre"]
-        fig_abx_pie = px.pie(abx_counts, names="Résultat", values="Nombre", title=f"Distribution de {selected_abx}")
+        fig_abx_pie = px.pie(
+            abx_counts,
+            names="Résultat",
+            values="Nombre",
+            title=f"Distribution de {selected_abx}"
+        )
         st.plotly_chart(fig_abx_pie, use_container_width=True)
 
     st.subheader("🧬 Camembert des phénotypes")
-    pheno_counts = filtered_df['Phenotype'].value_counts().reset_index() if 'Phenotype' in filtered_df.columns else pd.DataFrame(columns=['index', 'Phenotype'])
-    if not pheno_counts.empty:
+    if 'Phenotype' in filtered_df.columns:
+        pheno_counts = (
+            filtered_df['Phenotype']
+            .value_counts()
+            .reset_index()
+        )
         pheno_counts.columns = ["Phénotype", "Nombre"]
-        fig_pheno_pie = px.pie(pheno_counts, names="Phénotype", values="Nombre", title="Distribution des phénotypes")
+        fig_pheno_pie = px.pie(
+            pheno_counts,
+            names="Phénotype",
+            values="Nombre",
+            title="Distribution des phénotypes"
+        )
         st.plotly_chart(fig_pheno_pie, use_container_width=True)
     else:
         st.info("Aucune colonne 'Phenotype' trouvée dans les données exportées.")
 
 elif menu == "Staphylococcus aureus":
     st.title("🥠 Surveillance : Staphylococcus aureus")
-    tab1, tab2, tab3 = st.tabs(["Antibiotiques", "Phénotypes", "Alertes semaine/service"])
+    tab1, tab2, tab3 = st.tabs(
+        ["Antibiotiques", "Phénotypes", "Alertes semaine/service"]
+    )
 
     with tab1:
         st.subheader("📈 Évolution hebdomadaire de la résistance")
-        abx = st.selectbox("Choisir un antibiotique", sorted(antibiotiques.keys()))
+        abx = st.selectbox(
+            "Choisir un antibiotique",
+            sorted(antibiotiques.keys())
+        )
         df_abx = pd.read_excel(antibiotiques[abx])
         week_col = "Week" if "Week" in df_abx.columns else "Semaine"
         df_abx[week_col] = pd.to_numeric(df_abx[week_col], errors='coerce')
@@ -82,59 +123,119 @@ elif menu == "Staphylococcus aureus":
         df_abx["Pourcentage"] = df_abx["Pourcentage"].round(2)
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["Pourcentage"],
-                                 mode="lines+markers", name="% Résistance",
-                                 line=dict(width=3), marker=dict(color="blue")))
+        fig.add_trace(go.Scatter(
+            x=df_abx[week_col],
+            y=df_abx["Pourcentage"],
+            mode="lines+markers",
+            name="% Résistance",
+            line=dict(width=3),
+            marker=dict(color="blue")
+        ))
         if "Moyenne_mobile_8s" in df_abx.columns:
-            fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["Moyenne_mobile_8s"],
-                                     mode="lines", name="Moyenne mobile",
-                                     line=dict(dash="dash", color="orange")))
+            fig.add_trace(go.Scatter(
+                x=df_abx[week_col],
+                y=df_abx["Moyenne_mobile_8s"],
+                mode="lines",
+                name="Moyenne mobile",
+                line=dict(dash="dash", color="orange")
+            ))
         if "IC_sup" in df_abx.columns:
-            fig.add_trace(go.Scatter(x=df_abx[week_col], y=df_abx["IC_sup"],
-                                     mode="lines", name="Seuil IC 95%",
-                                     line=dict(dash="dot", color="gray")))
+            fig.add_trace(go.Scatter(
+                x=df_abx[week_col],
+                y=df_abx["IC_sup"],
+                mode="lines",
+                name="Seuil IC 95%",
+                line=dict(dash="dot", color="gray")
+            ))
         if "OUTLIER" in df_abx.columns:
             outliers = df_abx[df_abx["OUTLIER"] == True]
-            fig.add_trace(go.Scatter(x=outliers[week_col], y=outliers["Pourcentage"],
-                                     mode="markers", name="🔴 Alerte",
-                                     marker=dict(color="red", size=10)))
+            fig.add_trace(go.Scatter(
+                x=outliers[week_col],
+                y=outliers["Pourcentage"],
+                mode="markers",
+                name="🔴 Alerte",
+                marker=dict(color="red", size=10)
+            ))
 
-        fig.update_layout(title=f"Évolution de la résistance à {abx}",
-                          xaxis_title="Semaine", yaxis_title="% Résistance",
-                          legend_title="Légende", hovermode="x unified")
+        # Mise à jour du layout avec augmentation de la taille des textes
+        fig.update_layout(
+            title=f"Évolution de la résistance à {abx}",
+            legend=dict(
+                font=dict(size=16)            # Taille de la légende
+            ),
+            xaxis=dict(
+                title=dict(text="Semaine", font=dict(size=18)),  # Titre axe X en taille 18
+                tickfont=dict(size=14)                            # Graduations axe X en taille 14
+            ),
+            yaxis=dict(
+                title=dict(text="% Résistance", font=dict(size=18)),  # Titre axe Y en taille 18
+                tickfont=dict(size=14)                                  # Graduations axe Y en taille 14
+            ),
+            hovermode="x unified"
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
         st.subheader("🧬 Évolution des phénotypes")
-        pheno = st.selectbox("Choisir un phénotype", list(phenotypes.keys()))
+        pheno = st.selectbox(
+            "Choisir un phénotype",
+            list(phenotypes.keys())
+        )
         df_pheno = pd.read_excel(phenotypes[pheno])
         df_pheno["Week"] = pd.to_numeric(df_pheno["Week"], errors='coerce')
         df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
         df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
 
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=df_pheno["Week"], y=df_pheno["Pourcentage"],
-                                  mode="lines+markers", name="% Phenotype",
-                                  line=dict(width=3, color="blue")))
+        fig2.add_trace(go.Scatter(
+            x=df_pheno["Week"],
+            y=df_pheno["Pourcentage"],
+            mode="lines+markers",
+            name=f"% {pheno}",  # Libellé dynamique selon le phénotype choisi
+            line=dict(width=3, color="blue")
+        ))
         if "Moyenne_mobile_8s" in df_pheno.columns:
-            fig2.add_trace(go.Scatter(x=df_pheno["Week"], y=df_pheno["Moyenne_mobile_8s"],
-                                      mode="lines", name="Moyenne mobile",
-                                      line=dict(dash="dash", color="orange")))
+            fig2.add_trace(go.Scatter(
+                x=df_pheno["Week"],
+                y=df_pheno["Moyenne_mobile_8s"],
+                mode="lines",
+                name="Moyenne mobile",
+                line=dict(dash="dash", color="orange")
+            ))
         if "IC_sup" in df_pheno.columns:
-            fig2.add_trace(go.Scatter(x=df_pheno["Week"], y=df_pheno["IC_sup"],
-                                      mode="lines", name="Seuil IC 95%",
-                                      line=dict(dash="dot", color="gray")))
+            fig2.add_trace(go.Scatter(
+                x=df_pheno["Week"],
+                y=df_pheno["IC_sup"],
+                mode="lines",
+                name="Seuil IC 95%",
+                line=dict(dash="dot", color="gray")
+            ))
         if "OUTLIER" in df_pheno.columns:
             outliers = df_pheno[df_pheno["OUTLIER"] == True]
-            fig2.add_trace(go.Scatter(x=outliers["Week"], y=outliers["Pourcentage"],
-                                      mode="markers", name="🔴 Alerte",
-                                      marker=dict(color="red", size=10)))
+            fig2.add_trace(go.Scatter(
+                x=outliers["Week"],
+                y=outliers["Pourcentage"],
+                mode="markers",
+                name="🔴 Alerte",
+                marker=dict(color="red", size=10)
+            ))
 
-            # NOUVEAU code dans with tab2 (taille légende, titres, ticks agrandis)
-            fig2.update_layout(title=f"Évolution du phénotype {pheno}",legend=dict(font=dict(size=16)),xaxis=dict(title=dict(text="Semaine", font=dict(size=18)),tickfont=dict(size=14),yaxis=dict(
-        title=dict(text="% Phénotype", font=dict(size=18)),tickfont=dict(size=14)),hovermode="x unified"))
-
-
+        # Mise à jour du layout avec augmentation de la taille des textes
+        fig2.update_layout(
+            title=f"Évolution du phénotype {pheno}",
+            legend=dict(
+                font=dict(size=16)            # Taille de la légende
+            ),
+            xaxis=dict(
+                title=dict(text="Semaine", font=dict(size=18)),  # Titre axe X en taille 18
+                tickfont=dict(size=14)                            # Graduations axe X en taille 14
+            ),
+            yaxis=dict(
+                title=dict(text=f"% {pheno}", font=dict(size=18)),  # Titre axe Y dynamique en taille 18
+                tickfont=dict(size=14)                                # Graduations axe Y en taille 14
+            ),
+            hovermode="x unified"
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
     with tab3:
@@ -181,5 +282,8 @@ elif menu == "Staphylococcus aureus":
         st.dataframe(df_final_alertes, use_container_width=True)
 
         if not df_final_alertes.empty:
-            st.download_button("📅 Télécharger les alertes", data=df_final_alertes.to_csv(index=False),
-                               file_name="alertes_detectees.csv")
+            st.download_button(
+                "📅 Télécharger les alertes",
+                data=df_final_alertes.to_csv(index=False),
+                file_name="alertes_detectees.csv"
+            )
