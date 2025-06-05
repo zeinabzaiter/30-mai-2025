@@ -14,7 +14,7 @@ export_file = os.path.join(DATA_FOLDER, "Export_StaphAureus_COMPLET.csv")
 bacteries_df = pd.read_excel(bacteries_file)
 df_export = pd.read_csv(export_file)
 df_export.columns = df_export.columns.str.strip()
-df_export['semaine'] = pd.to_numeric(df_export['semaine'], errors='coerce')
+df_export['semaine'] = pd.to_numeric(df_export['semaine'], errors='coerce').astype(int)
 
 # Construction du dictionnaire des fichiers antibiotiques
 antibiotiques = {}
@@ -32,10 +32,109 @@ for file in os.listdir(DATA_FOLDER):
 # Chemins vers les fichiers de phénotypes
 phenotypes = {
     "MRSA": os.path.join(DATA_FOLDER, "MRSA_analyse.xlsx"),
-    "VRSA": os.path.join(DATA_FOLDER, "VRSA_analyse.xlsx"),
+    "VRSA": None,  # On n'utilisera plus de fichier Excel pour VRSA
     "Wild": os.path.join(DATA_FOLDER, "Wild_analyse.xlsx"),
     "Other": os.path.join(DATA_FOLDER, "Other_analyse.xlsx")
 }
+
+# Fonction utilitaire pour tracer le nombre brut de VRSA par semaine
+@st.cache_data
+def compute_weekly_vrsa_counts(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    À partir de df_export (colonnes 'semaine' et 'Phenotype'), 
+    filtre tous les isolats VRSA, puis calcule le nombre de VRSA par semaine.
+    Retourne un DataFrame ['semaine', 'nb_vrsa'] avec toutes les semaines
+    entre la min et la max, même celles où nb_vrsa = 0.
+    """
+    # On filtre les lignes où Phenotype == 'VRSA' (on passe en majuscule pour éviter les coquilles)
+    df_vrsa = df[df['Phenotype'].astype(str).str.strip().str.upper() == 'VRSA']
+    
+    # On compte le nombre de VRSA pour chaque semaine
+    counts = (
+        df_vrsa
+        .groupby('semaine')
+        .size()
+        .reset_index(name='nb_vrsa')
+        .sort_values('semaine')
+    )
+
+    # On s’assure que TOUTES les semaines entre min et max figurent (nb_vrsa = 0 si absent)
+    semaine_min = int(df['semaine'].min())
+    semaine_max = int(df['semaine'].max())
+    all_weeks = pd.DataFrame({'semaine': list(range(semaine_min, semaine_max + 1))})
+    counts = all_weeks.merge(counts, on='semaine', how='left').fillna(0)
+    counts['nb_vrsa'] = counts['nb_vrsa'].astype(int)
+
+    return counts
+
+# Fonction pour tracer le graphique du nombre brut de VRSA
+def plot_vrsa_count(df_counts: pd.DataFrame):
+    """
+    Trace un graphique Plotly :
+      - X = semaine
+      - Y = nb_vrsa (nombre de souches VRSA)
+      - ligne + marqueurs bleus
+      - marqueur rouge (alerte) quand nb_vrsa > 0
+    """
+    semaines = df_counts['semaine']
+    nb_vrsa = df_counts['nb_vrsa']
+    df_alert = df_counts[df_counts['nb_vrsa'] > 0]
+
+    fig = go.Figure()
+
+    # 1) Courbe principale du nombre de VRSA (bleu)
+    fig.add_trace(go.Scatter(
+        x=semaines,
+        y=nb_vrsa,
+        mode='lines+markers',
+        name='Nombre VRSA',
+        line=dict(color='blue', width=3),
+        marker=dict(color='blue', size=8),
+        hovertemplate='Semaine %{x}<br>Nb VRSA %{y}<extra></extra>'
+    ))
+
+    # 2) Points d’alerte (rouge) : semaines où nb_vrsa > 0
+    if not df_alert.empty:
+        fig.add_trace(go.Scatter(
+            x=df_alert['semaine'],
+            y=df_alert['nb_vrsa'],
+            mode='markers',
+            name='🔴 Alerte VRSA',
+            marker=dict(color='red', size=12),
+            hovertemplate='⚠ Alerte VRSA !<br>Semaine %{x}<br>Nb VRSA %{y}<extra></extra>'
+        ))
+
+    # Mise en page
+    fig.update_layout(
+        title=dict(
+            text="Évolution hebdomadaire du nombre de souches VRSA",
+            font=dict(size=26, family="Arial Black")
+        ),
+        legend=dict(
+            font=dict(size=18, family="Arial Black"),
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        xaxis=dict(
+            title=dict(text="Semaine", font=dict(size=22, family="Arial Black")),
+            tickfont=dict(size=18, family="Arial Black"),
+            dtick=1
+        ),
+        yaxis=dict(
+            title=dict(text="Nombre de VRSA", font=dict(size=22, family="Arial Black")),
+            tickfont=dict(size=18, family="Arial Black"),
+            rangemode="tozero"
+        ),
+        hovermode="x unified",
+        margin=dict(l=60, r=40, t=100, b=60),
+        height=600
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 
 # Menu latéral
 menu = st.sidebar.radio(
@@ -114,7 +213,9 @@ elif menu == "Staphylococcus aureus":
         ["Antibiotiques", "Phénotypes", "Alertes semaine/service"]
     )
 
+    # -------------------------------------------------------------------
     # Onglet 1 : évolution hebdomadaire de la résistance aux antibiotiques
+    # -------------------------------------------------------------------
     with tab1:
         st.subheader("📈 Évolution hebdomadaire de la résistance")
         abx = st.selectbox(
@@ -177,46 +278,90 @@ elif menu == "Staphylococcus aureus":
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # Onglet 2 : évolution des phénotypes
+    # -----------------------------------------------------
+    # Onglet 2 : évolution des phénotypes (dont VRSA count)
+    # -----------------------------------------------------
     with tab2:
-        st.subheader("🧬 Évolution des phénotypes")
-        show_all = st.checkbox("Afficher tous les phénotypes dans le même graphique", value=False)
+        st.subheader("🧬 Évolution des phénotypes (sur 4 graphiques ou 1)")
+
+        show_all = st.checkbox(
+            "Afficher tous les phénotypes dans le même graphique",
+            value=False
+        )
 
         if show_all:
-            # Chargement de tous les phénotypes
+            # Affichage comparé des 4 phénotypes (même logique que votre version d'origine)
             fig_all = go.Figure()
             couleurs = {"MRSA": "blue", "VRSA": "red", "Wild": "green", "Other": "purple"}
             for pheno, path in phenotypes.items():
-                df_ph = pd.read_excel(path)
-                df_ph["Week"] = pd.to_numeric(df_ph["Week"], errors='coerce')
-                df_ph = df_ph.dropna(subset=["Week", "Pourcentage"])
-                df_ph["Pourcentage"] = df_ph["Pourcentage"].round(2)
-
-                # Pour VRSA, définir OUTLIER quand Pourcentage > 0
                 if pheno == "VRSA":
-                    df_ph = df_ph.loc[:, ["Week", "Pourcentage"]].copy()
-                    df_ph["OUTLIER"] = df_ph["Pourcentage"] > 0
-
-                # Tracé du % phénotype
-                fig_all.add_trace(go.Scatter(
-                    x=df_ph["Week"],
-                    y=df_ph["Pourcentage"],
-                    mode="lines+markers",
-                    name=f"<b>% {pheno}</b>",
-                    line=dict(width=3, color=couleurs[pheno]),
-                    marker=dict(size=8)
-                ))
-
-                # Ajout des alertes pour chaque phénotype
-                if "OUTLIER" in df_ph.columns:
-                    out_df = df_ph[df_ph["OUTLIER"] == True]
+                    # ---------------------------
+                    # Tracé du “nombre de VRSA”
+                    # ---------------------------
+                    # On récupère le DataFrame comptant VRSA/semaine
+                    df_counts_vrsa = compute_weekly_vrsa_counts(df_export)
                     fig_all.add_trace(go.Scatter(
-                        x=out_df["Week"],
-                        y=out_df["Pourcentage"],
-                        mode="markers",
-                        name=f"<b>🔴 Alerte {pheno}</b>",
-                        marker=dict(color="black", size=12, symbol="circle-open")
+                        x=df_counts_vrsa['semaine'],
+                        y=df_counts_vrsa['nb_vrsa'],
+                        mode='lines+markers',
+                        name=f"<b>Nombre VRSA</b>",
+                        line=dict(color=couleurs[pheno], width=3),
+                        marker=dict(size=8)
                     ))
+                    # Points d’alerte (rouge foncé plein) sur nb_vrsa > 0
+                    df_alerts = df_counts_vrsa[df_counts_vrsa['nb_vrsa'] > 0]
+                    fig_all.add_trace(go.Scatter(
+                        x=df_alerts['semaine'],
+                        y=df_alerts['nb_vrsa'],
+                        mode='markers',
+                        name=f"<b>🔴 Alerte VRSA</b>",
+                        marker=dict(color="darkred", size=12),
+                        hovertemplate='ALERTE VRSA !<br>Semaine %{x}<br>Nb VRSA %{y}<extra></extra>'
+                    ))
+
+                else:
+                    # ---------------------------
+                    # Tracé du pourcentage (MRSA, Wild, Other)
+                    # ---------------------------
+                    df_ph = pd.read_excel(path)
+                    df_ph["Week"] = pd.to_numeric(df_ph["Week"], errors='coerce')
+                    df_ph = df_ph.dropna(subset=["Week", "Pourcentage"])
+                    df_ph["Pourcentage"] = df_ph["Pourcentage"].round(2)
+
+                    # Ajout de la moyenne mobile et IC si disponibles (sauf pour VRSA)
+                    fig_all.add_trace(go.Scatter(
+                        x=df_ph["Week"],
+                        y=df_ph["Pourcentage"],
+                        mode="lines+markers",
+                        name=f"<b>% {pheno}</b>",
+                        line=dict(width=3, color=couleurs[pheno]),
+                        marker=dict(size=8)
+                    ))
+                    if "Moyenne_mobile_8s" in df_ph.columns:
+                        fig_all.add_trace(go.Scatter(
+                            x=df_ph["Week"],
+                            y=df_ph["Moyenne_mobile_8s"],
+                            mode="lines",
+                            name=f"<b>Moyenne {pheno}</b>",
+                            line=dict(dash="dash", color=couleurs[pheno])
+                        ))
+                    if "IC_sup" in df_ph.columns:
+                        fig_all.add_trace(go.Scatter(
+                            x=df_ph["Week"],
+                            y=df_ph["IC_sup"],
+                            mode="lines",
+                            name=f"<b>IC sup {pheno}</b>",
+                            line=dict(dash="dot", color="lightgray")
+                        ))
+                    if "OUTLIER" in df_ph.columns:
+                        outliers = df_ph[df_ph["OUTLIER"] == True]
+                        fig_all.add_trace(go.Scatter(
+                            x=outliers["Week"],
+                            y=outliers["Pourcentage"],
+                            mode="markers",
+                            name=f"<b>🔴 Alerte {pheno}</b>",
+                            marker=dict(color="black", size=12, symbol="circle-open")
+                        ))
 
             fig_all.update_layout(
                 title=dict(text="Évolution comparée des 4 phénotypes", font=dict(size=26, family="Arial Black")),
@@ -226,7 +371,7 @@ elif menu == "Staphylococcus aureus":
                     tickfont=dict(size=18, family="Arial Black")
                 ),
                 yaxis=dict(
-                    title=dict(text="% Phénotype", font=dict(size=24, family="Arial Black")),
+                    title=dict(text="Valeur", font=dict(size=24, family="Arial Black")),
                     tickfont=dict(size=18, family="Arial Black")
                 ),
                 hovermode="x unified"
@@ -234,27 +379,53 @@ elif menu == "Staphylococcus aureus":
             st.plotly_chart(fig_all, use_container_width=True)
 
         else:
-            # Affichage d'un seul phénotype (comportement précédent)
+            # Affichage d'un seul phénotype choisi
             pheno = st.selectbox("Choisir un phénotype", list(phenotypes.keys()))
-            df_pheno = pd.read_excel(phenotypes[pheno])
-            df_pheno["Week"] = pd.to_numeric(df_pheno["Week"], errors='coerce')
-            df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
-            df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
-
             if pheno == "VRSA":
-                df_pheno = df_pheno.loc[:, ["Week", "Pourcentage"]].copy()
-                df_pheno["OUTLIER"] = df_pheno["Pourcentage"] > 0
+                # -----------------
+                # Affichage du nombre brut
+                # -----------------
+                st.write("### Nombre de souches VRSA par semaine")
+                df_counts_vrsa = compute_weekly_vrsa_counts(df_export)
+                plot_vrsa_count(df_counts_vrsa)
 
-            fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(
-                x=df_pheno["Week"],
-                y=df_pheno["Pourcentage"],
-                mode="lines+markers",
-                name=f"% {pheno}",
-                line=dict(width=3, color="blue")
-            ))
+                # On propose aussi le tableau récapitulatif
+                st.subheader("Tableau récapitulatif : Nb VRSA par semaine")
+                st.dataframe(
+                    df_counts_vrsa.rename(columns={'semaine': 'Semaine', 'nb_vrsa': 'Nb VRSA'}),
+                    use_container_width=True
+                )
+                csv_data = df_counts_vrsa.to_csv(index=False)
+                st.download_button(
+                    label="📥 Télécharger le tableau VRSA (CSV)",
+                    data=csv_data,
+                    file_name="decompte_VRSA_par_semaine.csv",
+                    mime="text/csv"
+                )
 
-            if pheno != "VRSA":
+            else:
+                # ----------------------------
+                # Affichage du pourcentage (MRSA, Wild, Other)
+                # ----------------------------
+                path = phenotypes[pheno]
+                df_pheno = pd.read_excel(path)
+                df_pheno["Week"] = pd.to_numeric(df_pheno["Week"], errors='coerce')
+                df_pheno = df_pheno.dropna(subset=["Week", "Pourcentage"])
+                df_pheno["Pourcentage"] = df_pheno["Pourcentage"].round(2)
+
+                if pheno == "VRSA":
+                    # (nous ne tombons jamais ici parce que VRSA est capté plus haut)
+                    pass
+
+                fig2 = go.Figure()
+                fig2.add_trace(go.Scatter(
+                    x=df_pheno["Week"],
+                    y=df_pheno["Pourcentage"],
+                    mode="lines+markers",
+                    name=f"% {pheno}",
+                    line=dict(width=3, color="blue")
+                ))
+
                 if "Moyenne_mobile_8s" in df_pheno.columns:
                     fig2.add_trace(go.Scatter(
                         x=df_pheno["Week"],
@@ -272,39 +443,41 @@ elif menu == "Staphylococcus aureus":
                         line=dict(dash="dot", color="gray")
                     ))
 
-            if "OUTLIER" in df_pheno.columns:
-                outliers = df_pheno[df_pheno["OUTLIER"] == True]
-                fig2.add_trace(go.Scatter(
-                    x=outliers["Week"],
-                    y=outliers["Pourcentage"],
-                    mode="markers",
-                    name="🔴 Alerte",
-                    marker=dict(color="red", size=10)
-                ))
+                if "OUTLIER" in df_pheno.columns:
+                    outliers = df_pheno[df_pheno["OUTLIER"] == True]
+                    fig2.add_trace(go.Scatter(
+                        x=outliers["Week"],
+                        y=outliers["Pourcentage"],
+                        mode="markers",
+                        name="🔴 Alerte",
+                        marker=dict(color="red", size=10)
+                    ))
 
-            fig2.update_layout(
-                title=dict(text=f"Évolution du phénotype {pheno}", font=dict(size=24, family="Arial Black")),
-                legend=dict(font=dict(size=20, family="Arial Black")),
-                xaxis=dict(
-                    title=dict(text="Semaine", font=dict(size=22, family="Arial Black")),
-                    tickfont=dict(size=18, family="Arial Black")
-                ),
-                yaxis=dict(
-                    title=dict(text=f"% {pheno}", font=dict(size=22, family="Arial Black")),
-                    tickfont=dict(size=18, family="Arial Black")
-                ),
-                hovermode="x unified"
-            )
-            st.plotly_chart(fig2, use_container_width=True)
+                fig2.update_layout(
+                    title=dict(text=f"Évolution du phénotype {pheno}", font=dict(size=24, family="Arial Black")),
+                    legend=dict(font=dict(size=20, family="Arial Black")),
+                    xaxis=dict(
+                        title=dict(text="Semaine", font=dict(size=22, family="Arial Black")),
+                        tickfont=dict(size=18, family="Arial Black")
+                    ),
+                    yaxis=dict(
+                        title=dict(text=f"% {pheno}", font=dict(size=22, family="Arial Black")),
+                        tickfont=dict(size=18, family="Arial Black")
+                    ),
+                    hovermode="x unified"
+                )
+                st.plotly_chart(fig2, use_container_width=True)
 
+    # -------------------------------------------------------
     # Onglet 3 : alertes croisées par semaine et service
+    # -------------------------------------------------------
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
         alertes = []
         correspondance = {
             "Gentamicin_analyse_2024": "Gentamycine",
             "Vancomycin_analyse_2024": "Vancomycine",
-            "Teicoplanin_analyse_2024": "Teicoplanine",
+            "Teicoplanin_analyse_2024": "Téicoplanine",
             "Linezolid_analyse": "Linezolide",
             "Daptomycin_analyse": "Daptomycine",
             "Clindamycin_analyse": "Clindamycine",
