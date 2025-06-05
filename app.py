@@ -1,8 +1,11 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
 import os
 import plotly.graph_objects as go
 import plotly.express as px
+import unicodedata
 
 st.set_page_config(page_title="Surveillance bactérienne", layout="wide")
 
@@ -10,21 +13,27 @@ DATA_FOLDER = "data"
 bacteries_file = os.path.join(DATA_FOLDER, "TOUS les bacteries a etudier.xlsx")
 export_file = os.path.join(DATA_FOLDER, "Export_StaphAureus_COMPLET.csv")
 
-# 1) Lecture des données globales
+# ----------------------------------------------------------------
+# 1) Lecture des données “globales”
+# ----------------------------------------------------------------
 bacteries_df = pd.read_excel(bacteries_file)
 
-# Lecture du CSV de StaphAureus (export)
-# On strippe les noms de colonne pour éviter les espaces superflus
+# Lecture du CSV d’export de S. aureus
 df_export = pd.read_csv(export_file)
+# On enlève les espaces avant/après dans les noms de colonnes
 df_export.columns = df_export.columns.str.strip()
-# On tente de convertir 'semaine' en int, s’il existe
+
+# Si la colonne 'semaine' existe, on la convertit en entier
 if 'semaine' in df_export.columns:
     df_export['semaine'] = pd.to_numeric(df_export['semaine'], errors='coerce').astype('Int64')
 
-# 2) Construction du dictionnaire des fichiers antibiotiques
+# ----------------------------------------------------------------
+# 2) Dictionnaire des fichiers antibiotiques (inchangé)
+# ----------------------------------------------------------------
 antibiotiques = {}
 for file in os.listdir(DATA_FOLDER):
     if file.startswith("pct") and file.endswith(".xlsx"):
+        # Exemple : "pctR_Vancomycin_analyse_2024.xlsx"
         abx_name = (
             file.replace("pctR_", "")
                 .replace("pct_R_", "")
@@ -34,57 +43,79 @@ for file in os.listdir(DATA_FOLDER):
         )
         antibiotiques[abx_name] = os.path.join(DATA_FOLDER, file)
 
-# 3) Chemins vers les fichiers de phénotypes (on retire VRSA ici : on ne lira plus Excel pour VRSA)
+# ----------------------------------------------------------------
+# 3) Chemins vers les fichiers de phénotypes (MRSA, Wild, Other)
+#    Pour VRSA on n'aura plus de fichier Excel : on calculera directement
+# ----------------------------------------------------------------
 phenotypes = {
     "MRSA": os.path.join(DATA_FOLDER, "MRSA_analyse.xlsx"),
-    "VRSA": None,  # calculé depuis df_export
+    "VRSA": None,  # Pas de fichier VRSA_analyse.xlsx, on comptera dans df_export
     "Wild": os.path.join(DATA_FOLDER, "Wild_analyse.xlsx"),
     "Other": os.path.join(DATA_FOLDER, "Other_analyse.xlsx")
 }
 
-# -----------------------------------------------------
-# Fonction utilitaire : localiser la colonne "Phenotype"
-# -----------------------------------------------------
+# ----------------------------------------------------------------
+# 4) Fonction utilitaire pour normaliser un nom de colonne
+#    (on retire les accents et on passe en minuscules)
+# ----------------------------------------------------------------
+def normalize_column_name(col_name: str) -> str:
+    """
+    Retire les accents du nom, supprime les espaces superflus et passe en minuscules.
+    Exemple : '  Phénotype ' -> 'phenotype'
+    """
+    # 1) Normalisation Unicode pour séparer base+accent
+    nfkd = unicodedata.normalize('NFKD', col_name)
+    # 2) On garde uniquement les caractères de base (on retire les accents)
+    no_accent = "".join([c for c in nfkd if not unicodedata.combining(c)])
+    # 3) On strip() (enlève espaces avant/après) et on passe en minuscules
+    return no_accent.strip().lower()
+
+# ----------------------------------------------------------------
+# 5) Fonction utilitaire pour détecter la colonne “phenotype”
+# ----------------------------------------------------------------
 @st.cache_data
 def detect_phenotype_column(df: pd.DataFrame) -> str | None:
     """
-    Parcourt les colonnes de df, en supprimant les espaces
-    et en passant en minuscules, pour trouver celle qui s'appelle 'phenotype'.
-    Retourne le nom exact de la colonne si trouvée, sinon None.
+    Parcourt toutes les colonnes de df, normalise chaque nom
+    (strip + minuscules + sans accents) et renvoie celui qui vaut 'phenotype'.
+    S’il n’y en a pas, renvoie None.
     """
     for col in df.columns:
-        if col.strip().lower() == "phenotype":
+        if normalize_column_name(col) == "phenotype":
             return col
     return None
 
-
-# -----------------------------------------------------
-# Fonction utilitaire : calculer le nombre de VRSA par semaine
-# -----------------------------------------------------
+# ----------------------------------------------------------------
+# 6) Fonction utilitaire : calculer le nombre brut de VRSA par semaine
+# ----------------------------------------------------------------
 @st.cache_data
 def compute_weekly_vrsa_counts(df: pd.DataFrame) -> pd.DataFrame:
     """
-    À partir du DataFrame "df_export", identifié la colonne de phénotype,
-    filtre tous les isolats où ce phénotype vaut 'VRSA', puis compte le nombre de VRSA par semaine.
-    Renvoie un DataFrame à deux colonnes :
-       - 'semaine' : int
-       - 'nb_vrsa' : nombre de souches VRSA cette semaine-là
-    On “remplit” aussi toutes les semaines entre min et max (avec nb_vrsa=0 si nécessaire).
+    À partir du DataFrame df (issu de df_export), on détecte dynamiquement
+    la colonne de phénotype (qu’on appelle par exemple "Phénotype" ou "Phenotype" etc.),
+    on filtre les isolats où ce phénotype = 'VRSA', et on compte combien
+    de VRSA il y a chaque semaine.
+    On renvoie un DataFrame à deux colonnes :
+      - 'semaine' : numéro de semaine (int)
+      - 'nb_vrsa' : nombre de souches VRSA pour cette semaine
+
+    On complète aussi toutes les semaines manquantes entre la min et la max
+    avec nb_vrsa = 0 (en cas d’absence de VRSA cette semaine).
     """
-    # 1) Identifier dynamiquement la colonne "Phenotype"
+    # 6.1) Trouver la colonne réelle qui correspond à “phenotype”
     pheno_col = detect_phenotype_column(df)
     if pheno_col is None:
-        # Si pas de colonne 'Phenotype', on renvoie un DataFrame vide
+        # Si on n’a pas de colonne contenant 'phenotype', on renvoie vide
         return pd.DataFrame(columns=['semaine', 'nb_vrsa'])
 
-    # 2) Filtrer les isolats VRSA (en majuscules pour la comparaison)
+    # 6.2) On filtre les lignes où le phénotype (après strip/upper) == 'VRSA'
     df_vrsa = df[df[pheno_col].astype(str).str.strip().str.upper() == "VRSA"].copy()
 
-    # 3) Si la colonne 'semaine' n’existe pas ou contient uniquement NaN, on renvoie vide
+    # 6.3) Si la colonne 'semaine' n’existe pas ou est vide, on renvoie vide
     if 'semaine' not in df_vrsa.columns or df_vrsa['semaine'].dropna().empty:
         return pd.DataFrame(columns=['semaine', 'nb_vrsa'])
 
-    # 4) Compter le nombre de VRSA par semaine
+    # 6.4) On compte le nombre de VRSA par semaine
     counts = (
         df_vrsa
         .groupby('semaine')
@@ -93,30 +124,29 @@ def compute_weekly_vrsa_counts(df: pd.DataFrame) -> pd.DataFrame:
         .sort_values('semaine')
     )
 
-    # 5) S’assurer d’avoir toutes les semaines entre la min et la max
+    # 6.5) On récupère la min et la max des semaines présentes dans df_export (pas seulement VRSA)
     try:
         semaine_min = int(df['semaine'].min())
         semaine_max = int(df['semaine'].max())
     except Exception:
-        # si conversion impossible, on renvoie simplement le counts tel quel
+        # Si on ne parvient pas à convertir, on renvoie juste le counts généré
         return counts
 
+    # 6.6) On crée un DataFrame de toutes les semaines de semaine_min à semaine_max
     all_weeks = pd.DataFrame({'semaine': list(range(semaine_min, semaine_max + 1))})
+    # Cahcé des valeurs manquantes : si une semaine n’a pas de VRSA, on met nb_vrsa = 0
     counts = all_weeks.merge(counts, on='semaine', how='left').fillna(0)
     counts['nb_vrsa'] = counts['nb_vrsa'].astype(int)
     return counts
 
-
-# -----------------------------------------------------
-# Fonction utilitaire : tracer le graphique VRSA
-# -----------------------------------------------------
+# ----------------------------------------------------------------
+# 7) Fonction utilitaire : tracer le graphique du nombre de VRSA
+# ----------------------------------------------------------------
 def plot_vrsa_count(df_counts: pd.DataFrame):
     """
-    Trace un graphique Plotly :
-      - X = semaine
-      - Y = nb_vrsa (nombre brut de souches VRSA)
-      - ligne + marqueurs bleus
-      - marqueur rouge (alerte) si nb_vrsa > 0
+    Trace un graphique Plotly du nombre brut de VRSA par semaine.
+      - Ligne + marqueurs bleus pour le nombre de VRSA
+      - Points rouges (alerte) les semaines où nb_vrsa > 0
     """
     semaines = df_counts['semaine']
     nb_vrsa = df_counts['nb_vrsa']
@@ -124,7 +154,7 @@ def plot_vrsa_count(df_counts: pd.DataFrame):
 
     fig = go.Figure()
 
-    # 1) Courbe principale du nombre de VRSA (bleu)
+    # 7.1) Courbe principale en bleu
     fig.add_trace(go.Scatter(
         x=semaines,
         y=nb_vrsa,
@@ -135,7 +165,7 @@ def plot_vrsa_count(df_counts: pd.DataFrame):
         hovertemplate='Semaine %{x}<br>Nb VRSA %{y}<extra></extra>'
     ))
 
-    # 2) Points d’alerte (rouge) si nb_vrsa > 0
+    # 7.2) Points d’alerte (rouge) si nb_vrsa > 0
     if not df_alert.empty:
         fig.add_trace(go.Scatter(
             x=df_alert['semaine'],
@@ -146,7 +176,7 @@ def plot_vrsa_count(df_counts: pd.DataFrame):
             hovertemplate='⚠ Alerte VRSA !<br>Semaine %{x}<br>Nb VRSA %{y}<extra></extra>'
         ))
 
-    # 3) Mise en page
+    # 7.3) Mise en forme du layout
     fig.update_layout(
         title=dict(
             text="Évolution hebdomadaire du nombre de souches VRSA",
@@ -178,9 +208,9 @@ def plot_vrsa_count(df_counts: pd.DataFrame):
     st.plotly_chart(fig, use_container_width=True)
 
 
-# -----------------------------------------------------
-# Construction du menu latéral
-# -----------------------------------------------------
+# ----------------------------------------------------------------
+# 8) Construction du menu latéral et des onglets
+# ----------------------------------------------------------------
 menu = st.sidebar.radio(
     "Navigation",
     ["Vue globale", "Staphylococcus aureus", "Répartition globale"]
@@ -193,7 +223,7 @@ if menu == "Vue globale":
 elif menu == "Répartition globale":
     st.title("🥧 Répartition globale (camemberts)")
 
-    # Filtrage par semaines
+    # Filtrer par plage de semaines
     semaine_min = int(df_export["semaine"].min())
     semaine_max = int(df_export["semaine"].max())
     semaine_range = st.slider(
@@ -209,7 +239,6 @@ elif menu == "Répartition globale":
         (df_export["semaine"] <= semaine_range[1])
     ]
 
-    # Camembert résultats antibiotiques
     st.subheader("🦠 Camembert des résultats antibiotiques")
     abx_to_plot = [
         col for col in filtered_df.columns
@@ -235,10 +264,9 @@ elif menu == "Répartition globale":
         )
         st.plotly_chart(fig_abx_pie, use_container_width=True)
 
-    # Camembert des phénotypes
     st.subheader("🧬 Camembert des phénotypes")
+    # On cherche à afficher soit la colonne "Phenotype" soit "phenotype"
     if 'Phenotype' in filtered_df.columns or 'phenotype' in filtered_df.columns:
-        # On vérifie la casse/minuscules
         pheno_col_global = ('Phenotype' if 'Phenotype' in filtered_df.columns else 'phenotype')
         pheno_counts = (
             filtered_df[pheno_col_global]
@@ -262,9 +290,9 @@ elif menu == "Staphylococcus aureus":
         ["Antibiotiques", "Phénotypes", "Alertes semaine/service"]
     )
 
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------
     # Onglet 1 : évolution hebdomadaire de la résistance aux antibiotiques
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------
     with tab1:
         st.subheader("📈 Évolution hebdomadaire de la résistance")
         abx = st.selectbox(
@@ -327,9 +355,9 @@ elif menu == "Staphylococcus aureus":
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # -----------------------------------------------------
-    # Onglet 2 : évolution des phénotypes (dont VRSA count)
-    # -----------------------------------------------------
+    # ------------------------------------------------------------
+    # Onglet 2 : évolution des phénotypes (dont VRSA = compte brut)
+    # ------------------------------------------------------------
     with tab2:
         st.subheader("🧬 Évolution des phénotypes (sur 4 graphiques ou 1)")
 
@@ -345,9 +373,7 @@ elif menu == "Staphylococcus aureus":
 
             for pheno, path in phenotypes.items():
                 if pheno == "VRSA":
-                    # ---------------------------
                     # Tracé du “nombre de VRSA”
-                    # ---------------------------
                     df_counts_vrsa = compute_weekly_vrsa_counts(df_export)
                     fig_all.add_trace(go.Scatter(
                         x=df_counts_vrsa['semaine'],
@@ -369,9 +395,7 @@ elif menu == "Staphylococcus aureus":
                     ))
 
                 else:
-                    # ---------------------------
                     # Tracé du pourcentage (MRSA, Wild, Other)
-                    # ---------------------------
                     df_ph = pd.read_excel(path)
                     df_ph["Week"] = pd.to_numeric(df_ph["Week"], errors='coerce')
                     df_ph = df_ph.dropna(subset=["Week", "Pourcentage"])
@@ -428,7 +452,7 @@ elif menu == "Staphylococcus aureus":
             st.plotly_chart(fig_all, use_container_width=True)
 
         else:
-            # Affichage d'un seul phénotype choisi
+            # Affichage d’un seul phénotype choisi
             pheno = st.selectbox("Choisir un phénotype", list(phenotypes.keys()))
 
             if pheno == "VRSA":
@@ -437,16 +461,13 @@ elif menu == "Staphylococcus aureus":
                 # -----------------
                 st.write("### Nombre de souches VRSA par semaine")
 
-                # Calcul des décomptes hebdomadaires de VRSA
                 df_counts_vrsa = compute_weekly_vrsa_counts(df_export)
 
-                # Si la table est vide, on informe l'utilisateur
                 if df_counts_vrsa.empty:
-                    st.error("Impossible de trouver la colonne 'Phenotype' dans `Export_StaphAureus_COMPLET.csv`, ou "
-                             "la colonne 'semaine' n’est pas correctement renseignée. "
-                             "Vérifiez votre fichier d’export.")
+                    st.error("Impossible de trouver la colonne 'Phenotype' (ou 'phenotype') dans "
+                             "`Export_StaphAureus_COMPLET.csv`, ou la colonne 'semaine' n’est pas correctement renseignée.")
                 else:
-                    # Tracé du graphique VRSA
+                    # Tracé du graphique du nombre de VRSA
                     plot_vrsa_count(df_counts_vrsa)
 
                     # Tableau récapitulatif
@@ -524,9 +545,9 @@ elif menu == "Staphylococcus aureus":
                 )
                 st.plotly_chart(fig2, use_container_width=True)
 
-    # -------------------------------------------------------
+    # ---------------------------------------------------
     # Onglet 3 : alertes croisées par semaine et service
-    # -------------------------------------------------------
+    # ---------------------------------------------------
     with tab3:
         st.subheader("🚨 Alertes croisées par semaine et service")
         alertes = []
