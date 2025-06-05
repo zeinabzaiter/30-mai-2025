@@ -350,6 +350,10 @@ def onglet_phenotypes():
             df_pheno = df_pheno.dropna(subset=["Week", "VRSA"])
             df_pheno["VRSA"] = df_pheno["VRSA"].astype(int)
 
+            # On récupère les bornes X
+            semaine_min = int(df_pheno["Week"].min())
+            semaine_max = int(df_pheno["Week"].max())
+
             # 1) Tracé du graphique du nombre de VRSA
             fig_vrsa = go.Figure()
             fig_vrsa.add_trace(go.Scatter(
@@ -374,6 +378,7 @@ def onglet_phenotypes():
                     hovertemplate="⚠ Alerte VRSA !<br>Semaine %{x}<br>Nombre VRSA %{y}<extra></extra>"
                 ))
 
+            # 3) Configuration de l'axe X pour 1,2,3,... sans chevauchement
             fig_vrsa.update_layout(
                 title=dict(
                     text="Évolution hebdomadaire du nombre de souches VRSA",
@@ -390,7 +395,10 @@ def onglet_phenotypes():
                 xaxis=dict(
                     title=dict(text="Semaine", font=dict(size=22, family="Arial Black")),
                     tickfont=dict(size=18, family="Arial Black"),
-                    dtick=1
+                    tickmode="linear",
+                    tick0=semaine_min,
+                    dtick=1,
+                    range=[semaine_min - 0.5, semaine_max + 0.5]
                 ),
                 yaxis=dict(
                     title=dict(text="Nombre de VRSA", font=dict(size=22, family="Arial Black")),
@@ -403,7 +411,7 @@ def onglet_phenotypes():
             )
             st.plotly_chart(fig_vrsa, use_container_width=True)
 
-            # 3) Tableau récapitulatif + téléchargement CSV
+            # 4) Tableau récapitulatif + téléchargement CSV
             st.subheader("Tableau récapitulatif : Nb VRSA par semaine")
             df_table = (
                 df_pheno[["Week", "VRSA"]]
