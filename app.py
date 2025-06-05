@@ -378,7 +378,7 @@ def onglet_phenotypes():
                     hovertemplate="⚠ Alerte VRSA !<br>Semaine %{x}<br>Nombre VRSA %{y}<extra></extra>"
                 ))
 
-            # 3) Configuration de l'axe X pour 1,2,3,... sans chevauchement
+            # 3) Configuration de l'axe X pour 0,10,20,30,...
             fig_vrsa.update_layout(
                 title=dict(
                     text="Évolution hebdomadaire du nombre de souches VRSA",
@@ -397,7 +397,7 @@ def onglet_phenotypes():
                     tickfont=dict(size=18, family="Arial Black"),
                     tickmode="linear",
                     tick0=semaine_min,
-                    dtick=1,
+                    dtick=10,
                     range=[semaine_min - 0.5, semaine_max + 0.5]
                 ),
                 yaxis=dict(
@@ -430,7 +430,7 @@ def onglet_phenotypes():
             )
 
         else:
-            # MRSA / Wild / Other : affichage du pourcentage + moyenne mobile + IC
+            # MRSA / Wild / Other : affichage du % + moyenne mobile + IC
             path_pheno = phenotypes[pheno]
             if not path_pheno or not os.path.isfile(path_pheno):
                 st.error(f"Impossible de trouver le fichier `{path_pheno}`.")
@@ -444,6 +444,9 @@ def onglet_phenotypes():
             df_ph["Week"] = pd.to_numeric(df_ph["Week"], errors="coerce")
             df_ph = df_ph.dropna(subset=["Week", "Pourcentage"])
             df_ph["Pourcentage"] = df_ph["Pourcentage"].round(2)
+
+            semaine_min_mrsa = int(df_ph["Week"].min())
+            semaine_max_mrsa = int(df_ph["Week"].max())
 
             fig2 = go.Figure()
             fig2.add_trace(go.Scatter(
@@ -485,7 +488,10 @@ def onglet_phenotypes():
                 legend=dict(font=dict(size=20, family="Arial Black")),
                 xaxis=dict(
                     title=dict(text="Semaine", font=dict(size=22, family="Arial Black")),
-                    tickfont=dict(size=18, family="Arial Black")
+                    tickfont=dict(size=18, family="Arial Black"),
+                    tickmode="linear",
+                    tick0=semaine_min_mrsa,
+                    dtick=10
                 ),
                 yaxis=dict(
                     title=dict(text=f"% {pheno}", font=dict(size=22, family="Arial Black")),
@@ -554,17 +560,19 @@ def onglet_alertes():
 # 10) Lancement de l'application
 # --------------------------------------------------
 def main():
-    page = st.sidebar.radio("Navigation", 
-                             ["Vue globale", 
-                              "Staphylococcus aureus", 
-                              "Répartition globale"])
+    page = st.sidebar.radio(
+        "Navigation",
+        ["Vue globale", "Staphylococcus aureus", "Répartition globale"]
+    )
     if page == "Vue globale":
         page_vue_globale()
     elif page == "Répartition globale":
         page_repartition_globale()
     elif page == "Staphylococcus aureus":
         st.title("🥠 Surveillance : Staphylococcus aureus")
-        tab1, tab2, tab3 = st.tabs(["Antibiotiques", "Phénotypes", "Alertes semaine/service"])
+        tab1, tab2, tab3 = st.tabs(
+            ["Antibiotiques", "Phénotypes", "Alertes semaine/service"]
+        )
         with tab1:
             onglet_antibiotiques()
         with tab2:
